@@ -1,7 +1,7 @@
 {
   "name": "react",
   "version": "1.0.0",
-  "homepage": "https://mirzairfan1969-source.github.io/PrintMyCase/",
+  "homepage": ".",
   "description": "",
   "keywords": [],
   "main": "src/index.tsx",
