@@ -1,165 +1,297 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 
 /* ═══════════════════════════════════════════════════════════════════
-   PHONE DATABASE — 150+ models, verified dimensions (mm)
+   PHONE DATABASE — 200+ models with dimensions (mm), camera module
+   position (cam) and fingerprint type (fp) for accurate cut guides.
+   cam: { x, y, w, h, r } — top-left origin on phone BACK (mm)
+   fp:  { type: 'none'|'side'|'udp'|'rear', x?, y?, r? }
+        rear = needs cutout on back insert (x,y from top-left, r=radius)
+        side/udp = no back cutout needed
 ═══════════════════════════════════════════════════════════════════ */
 const PHONES = {
   Apple: {
-    "iPhone 16 Pro Max": { w: 77.6, h: 163.0, t: 8.25 },
-    "iPhone 16 Pro":     { w: 71.5, h: 149.6, t: 8.25 },
-    "iPhone 16 Plus":    { w: 77.6, h: 163.0, t: 7.8  },
-    "iPhone 16":         { w: 71.5, h: 147.6, t: 7.8  },
-    "iPhone 15 Pro Max": { w: 76.7, h: 159.9, t: 8.25 },
-    "iPhone 15 Pro":     { w: 70.6, h: 146.6, t: 8.25 },
-    "iPhone 15 Plus":    { w: 77.8, h: 160.9, t: 7.8  },
-    "iPhone 15":         { w: 71.5, h: 155.7, t: 7.8  },
-    "iPhone 14 Pro Max": { w: 77.6, h: 160.7, t: 7.85 },
-    "iPhone 14 Pro":     { w: 71.5, h: 147.5, t: 7.85 },
-    "iPhone 14 Plus":    { w: 77.8, h: 160.8, t: 7.8  },
-    "iPhone 14":         { w: 71.5, h: 146.7, t: 7.8  },
-    "iPhone 13 Pro Max": { w: 78.1, h: 160.8, t: 7.65 },
-    "iPhone 13 Pro":     { w: 71.5, h: 146.7, t: 7.65 },
-    "iPhone 13":         { w: 71.5, h: 146.7, t: 7.65 },
-    "iPhone 13 mini":    { w: 64.2, h: 131.5, t: 7.65 },
-    "iPhone 12 Pro Max": { w: 78.1, h: 160.8, t: 7.4  },
-    "iPhone 12 Pro":     { w: 71.5, h: 146.7, t: 7.4  },
-    "iPhone 12":         { w: 71.5, h: 146.7, t: 7.4  },
-    "iPhone 12 mini":    { w: 64.2, h: 131.5, t: 7.4  },
-    "iPhone 11 Pro Max": { w: 77.8, h: 158.0, t: 8.1  },
-    "iPhone 11":         { w: 75.7, h: 150.9, t: 8.3  },
-    "iPhone SE (3rd gen)": { w: 67.3, h: 138.4, t: 7.3 },
+    "iPhone 16 Pro Max": { w:77.6,h:163.0,t:8.25, cam:{x:5.0,y:5.5,w:43,h:43,r:10}, fp:{type:"none"} },
+    "iPhone 16 Pro":     { w:71.5,h:149.6,t:8.25, cam:{x:5.0,y:5.0,w:38,h:38,r:9},  fp:{type:"none"} },
+    "iPhone 16 Plus":    { w:77.6,h:163.0,t:7.8,  cam:{x:7.5,y:8.0,w:26,h:48,r:8},  fp:{type:"none"} },
+    "iPhone 16":         { w:71.5,h:147.6,t:7.8,  cam:{x:6.5,y:7.5,w:23,h:23,r:7},  fp:{type:"none"} },
+    "iPhone 15 Pro Max": { w:76.7,h:159.9,t:8.25, cam:{x:5.0,y:5.5,w:40,h:40,r:10}, fp:{type:"none"} },
+    "iPhone 15 Pro":     { w:70.6,h:146.6,t:8.25, cam:{x:5.0,y:5.0,w:36,h:36,r:9},  fp:{type:"none"} },
+    "iPhone 15 Plus":    { w:77.8,h:160.9,t:7.8,  cam:{x:7.5,y:8.0,w:24,h:46,r:8},  fp:{type:"none"} },
+    "iPhone 15":         { w:71.5,h:155.7,t:7.8,  cam:{x:6.5,y:7.5,w:22,h:42,r:8},  fp:{type:"none"} },
+    "iPhone 14 Pro Max": { w:77.6,h:160.7,t:7.85, cam:{x:5.0,y:5.5,w:38,h:38,r:10}, fp:{type:"none"} },
+    "iPhone 14 Pro":     { w:71.5,h:147.5,t:7.85, cam:{x:5.0,y:5.0,w:34,h:34,r:9},  fp:{type:"none"} },
+    "iPhone 14 Plus":    { w:77.8,h:160.8,t:7.8,  cam:{x:7.5,y:7.5,w:23,h:44,r:8},  fp:{type:"none"} },
+    "iPhone 14":         { w:71.5,h:146.7,t:7.8,  cam:{x:7.0,y:7.5,w:22,h:42,r:8},  fp:{type:"none"} },
+    "iPhone 13 Pro Max": { w:78.1,h:160.8,t:7.65, cam:{x:5.0,y:5.5,w:36,h:36,r:9},  fp:{type:"none"} },
+    "iPhone 13 Pro":     { w:71.5,h:146.7,t:7.65, cam:{x:5.0,y:5.0,w:33,h:33,r:9},  fp:{type:"none"} },
+    "iPhone 13":         { w:71.5,h:146.7,t:7.65, cam:{x:7.0,y:7.5,w:21,h:21,r:7},  fp:{type:"none"} },
+    "iPhone 13 mini":    { w:64.2,h:131.5,t:7.65, cam:{x:6.5,y:7.0,w:19,h:19,r:7},  fp:{type:"none"} },
+    "iPhone 12 Pro Max": { w:78.1,h:160.8,t:7.4,  cam:{x:5.0,y:5.5,w:34,h:34,r:8},  fp:{type:"none"} },
+    "iPhone 12 Pro":     { w:71.5,h:146.7,t:7.4,  cam:{x:5.0,y:5.0,w:31,h:31,r:8},  fp:{type:"none"} },
+    "iPhone 12":         { w:71.5,h:146.7,t:7.4,  cam:{x:7.0,y:7.5,w:19,h:19,r:7},  fp:{type:"none"} },
+    "iPhone 12 mini":    { w:64.2,h:131.5,t:7.4,  cam:{x:6.5,y:7.0,w:17,h:17,r:7},  fp:{type:"none"} },
+    "iPhone 11 Pro Max": { w:77.8,h:158.0,t:8.1,  cam:{x:5.5,y:5.5,w:32,h:32,r:8},  fp:{type:"none"} },
+    "iPhone 11 Pro":     { w:71.4,h:144.0,t:8.1,  cam:{x:5.0,y:5.0,w:29,h:29,r:8},  fp:{type:"none"} },
+    "iPhone 11":         { w:75.7,h:150.9,t:8.3,  cam:{x:7.0,y:7.0,w:20,h:34,r:7},  fp:{type:"none"} },
+    "iPhone XR":         { w:75.7,h:150.9,t:8.3,  cam:{x:8.0,y:8.0,w:16,h:16,r:6},  fp:{type:"none"} },
+    "iPhone SE (3rd gen)":{ w:67.3,h:138.4,t:7.3, cam:{x:6.5,y:7.0,w:14,h:14,r:5},  fp:{type:"none"} },
+    "iPhone SE (2nd gen)":{ w:67.3,h:138.4,t:7.3, cam:{x:6.5,y:7.0,w:14,h:14,r:5},  fp:{type:"none"} },
   },
   Samsung: {
-    "Galaxy S24 Ultra": { w: 79.0, h: 162.3, t: 8.6 },
-    "Galaxy S24+":      { w: 75.9, h: 158.5, t: 7.7 },
-    "Galaxy S24":       { w: 70.6, h: 147.0, t: 7.6 },
-    "Galaxy S23 Ultra": { w: 78.1, h: 163.4, t: 8.9 },
-    "Galaxy S23+":      { w: 76.2, h: 157.8, t: 7.6 },
-    "Galaxy S23":       { w: 70.9, h: 146.3, t: 7.6 },
-    "Galaxy S22 Ultra": { w: 77.9, h: 163.3, t: 8.9 },
-    "Galaxy S22+":      { w: 75.8, h: 157.4, t: 7.6 },
-    "Galaxy S22":       { w: 70.6, h: 146.0, t: 7.6 },
-    "Galaxy A55":       { w: 76.5, h: 161.1, t: 8.2 },
-    "Galaxy A54":       { w: 76.7, h: 158.2, t: 8.2 },
-    "Galaxy A35":       { w: 76.7, h: 161.7, t: 8.2 },
-    "Galaxy A34":       { w: 78.1, h: 161.3, t: 8.2 },
-    "Galaxy A25":       { w: 76.5, h: 161.0, t: 7.8 },
-    "Galaxy A15":       { w: 76.8, h: 160.1, t: 8.4 },
-    "Galaxy A14":       { w: 76.8, h: 167.7, t: 9.1 },
-    "Galaxy M55":       { w: 76.5, h: 163.8, t: 7.8 },
-    "Galaxy M34":       { w: 76.7, h: 165.4, t: 8.6 },
-    "Galaxy M14":       { w: 77.2, h: 167.0, t: 9.4 },
-    "Galaxy F55":       { w: 76.5, h: 163.8, t: 7.8 },
+    "Galaxy S25 Ultra":  { w:77.6,h:162.8,t:8.2,  cam:{x:8.0,y:7.5,w:14,h:60,r:5},  fp:{type:"udp"} },
+    "Galaxy S25+":       { w:75.8,h:158.4,t:7.3,  cam:{x:8.5,y:8.0,w:12,h:50,r:4},  fp:{type:"udp"} },
+    "Galaxy S25":        { w:70.5,h:146.9,t:7.2,  cam:{x:8.0,y:9.0,w:11,h:38,r:4},  fp:{type:"udp"} },
+    "Galaxy S24 Ultra":  { w:79.0,h:162.3,t:8.6,  cam:{x:8.5,y:7.5,w:14,h:58,r:5},  fp:{type:"udp"} },
+    "Galaxy S24+":       { w:75.9,h:158.5,t:7.7,  cam:{x:9.0,y:8.0,w:13,h:50,r:4},  fp:{type:"udp"} },
+    "Galaxy S24":        { w:70.6,h:147.0,t:7.6,  cam:{x:8.0,y:9.0,w:12,h:40,r:4},  fp:{type:"udp"} },
+    "Galaxy S23 Ultra":  { w:78.1,h:163.4,t:8.9,  cam:{x:8.5,y:8.0,w:13,h:56,r:5},  fp:{type:"udp"} },
+    "Galaxy S23+":       { w:76.2,h:157.8,t:7.6,  cam:{x:9.0,y:8.5,w:12,h:48,r:4},  fp:{type:"udp"} },
+    "Galaxy S23":        { w:70.9,h:146.3,t:7.6,  cam:{x:8.0,y:9.5,w:11,h:38,r:4},  fp:{type:"udp"} },
+    "Galaxy S22 Ultra":  { w:77.9,h:163.3,t:8.9,  cam:{x:8.5,y:7.5,w:13,h:54,r:5},  fp:{type:"udp"} },
+    "Galaxy S22+":       { w:75.8,h:157.4,t:7.6,  cam:{x:9.0,y:8.0,w:12,h:46,r:4},  fp:{type:"udp"} },
+    "Galaxy S22":        { w:70.6,h:146.0,t:7.6,  cam:{x:8.0,y:9.0,w:11,h:36,r:4},  fp:{type:"udp"} },
+    "Galaxy S21 Ultra":  { w:75.6,h:167.1,t:8.9,  cam:{x:5.0,y:5.0,w:17,h:60,r:5},  fp:{type:"udp"} },
+    "Galaxy S21+":       { w:75.6,h:161.4,t:7.8,  cam:{x:5.0,y:5.0,w:14,h:50,r:4},  fp:{type:"udp"} },
+    "Galaxy S21":        { w:71.2,h:151.7,t:7.9,  cam:{x:0.0,y:0.0,w:14,h:40,r:4},  fp:{type:"udp"} },
+    "Galaxy A55":        { w:76.5,h:161.1,t:8.2,  cam:{x:8.5,y:9.0,w:12,h:42,r:5},  fp:{type:"side",y:67} },
+    "Galaxy A54":        { w:76.7,h:158.2,t:8.2,  cam:{x:8.5,y:9.0,w:12,h:40,r:5},  fp:{type:"side",y:65} },
+    "Galaxy A35":        { w:76.7,h:161.7,t:8.2,  cam:{x:8.0,y:9.0,w:11,h:38,r:5},  fp:{type:"side",y:67} },
+    "Galaxy A34":        { w:78.1,h:161.3,t:8.2,  cam:{x:8.5,y:9.0,w:12,h:38,r:5},  fp:{type:"side",y:66} },
+    "Galaxy A25":        { w:76.5,h:161.0,t:7.8,  cam:{x:8.5,y:9.0,w:12,h:36,r:5},  fp:{type:"side",y:66} },
+    "Galaxy A15 5G":     { w:76.8,h:160.1,t:8.4,  cam:{x:8.5,y:9.0,w:13,h:34,r:5},  fp:{type:"side",y:65} },
+    "Galaxy A15":        { w:76.8,h:160.1,t:8.4,  cam:{x:8.5,y:9.0,w:13,h:34,r:5},  fp:{type:"side",y:65} },
+    "Galaxy A14":        { w:76.8,h:167.7,t:9.1,  cam:{x:8.5,y:9.0,w:13,h:32,r:5},  fp:{type:"rear",x:38.4,y:115,r:4} },
+    "Galaxy A13":        { w:76.4,h:165.1,t:8.8,  cam:{x:8.5,y:9.0,w:12,h:32,r:5},  fp:{type:"rear",x:38.2,y:112,r:4} },
+    "Galaxy A05s":       { w:76.8,h:167.1,t:9.1,  cam:{x:8.5,y:9.0,w:12,h:30,r:5},  fp:{type:"side",y:68} },
+    "Galaxy M55":        { w:76.5,h:163.8,t:7.8,  cam:{x:8.5,y:9.0,w:12,h:40,r:5},  fp:{type:"side",y:68} },
+    "Galaxy M34":        { w:76.7,h:165.4,t:8.6,  cam:{x:8.5,y:9.0,w:12,h:36,r:5},  fp:{type:"side",y:69} },
+    "Galaxy M14":        { w:77.2,h:167.0,t:9.4,  cam:{x:8.5,y:9.0,w:12,h:32,r:5},  fp:{type:"rear",x:38.6,y:113,r:4} },
+    "Galaxy F55":        { w:76.5,h:163.8,t:7.8,  cam:{x:8.5,y:9.0,w:12,h:40,r:5},  fp:{type:"side",y:68} },
+    "Galaxy F34":        { w:76.7,h:165.4,t:8.6,  cam:{x:8.5,y:9.0,w:12,h:36,r:5},  fp:{type:"side",y:69} },
   },
   OnePlus: {
-    "OnePlus 12":           { w: 75.8, h: 163.1, t: 9.15 },
-    "OnePlus 12R":          { w: 75.8, h: 163.1, t: 8.8  },
-    "OnePlus 11":           { w: 74.1, h: 163.1, t: 8.53 },
-    "OnePlus 11R":          { w: 74.0, h: 162.2, t: 8.7  },
-    "OnePlus Nord 4":       { w: 74.0, h: 162.6, t: 8.0  },
-    "OnePlus Nord CE 4":    { w: 74.0, h: 162.6, t: 7.9  },
-    "OnePlus Nord CE 3":    { w: 73.7, h: 162.5, t: 8.2  },
-    "OnePlus Nord 3":       { w: 74.0, h: 162.4, t: 8.1  },
-    "OnePlus Nord CE 3 Lite": { w: 73.7, h: 165.7, t: 8.3 },
+    "OnePlus 12":            { w:75.8,h:163.1,t:9.15, cam:{x:5.0,y:6.0,w:34,h:40,r:12}, fp:{type:"udp"} },
+    "OnePlus 12R":           { w:75.8,h:163.1,t:8.8,  cam:{x:6.0,y:7.0,w:28,h:36,r:10}, fp:{type:"udp"} },
+    "OnePlus 11":            { w:74.1,h:163.1,t:8.53, cam:{x:5.0,y:6.0,w:32,h:38,r:12}, fp:{type:"udp"} },
+    "OnePlus 11R":           { w:74.0,h:162.2,t:8.7,  cam:{x:6.0,y:7.0,w:26,h:36,r:10}, fp:{type:"udp"} },
+    "OnePlus 10 Pro":        { w:73.9,h:163.0,t:8.55, cam:{x:5.0,y:5.0,w:32,h:40,r:12}, fp:{type:"udp"} },
+    "OnePlus 10T":           { w:75.0,h:163.3,t:8.75, cam:{x:6.0,y:6.5,w:28,h:36,r:10}, fp:{type:"udp"} },
+    "OnePlus 10R":           { w:74.1,h:160.7,t:8.0,  cam:{x:6.5,y:7.5,w:24,h:36,r:9},  fp:{type:"side",y:65} },
+    "OnePlus 9 Pro":         { w:73.6,h:163.2,t:8.7,  cam:{x:5.5,y:6.0,w:30,h:38,r:12}, fp:{type:"udp"} },
+    "OnePlus 9":             { w:74.2,h:160.7,t:8.7,  cam:{x:6.0,y:7.0,w:26,h:36,r:10}, fp:{type:"udp"} },
+    "OnePlus 9R":            { w:74.9,h:162.9,t:8.4,  cam:{x:6.5,y:7.5,w:22,h:34,r:8},  fp:{type:"side",y:66} },
+    "OnePlus 9RT":           { w:75.0,h:163.6,t:8.4,  cam:{x:6.0,y:7.0,w:24,h:36,r:9},  fp:{type:"side",y:67} },
+    "OnePlus 8T":            { w:74.1,h:160.7,t:8.4,  cam:{x:6.5,y:7.5,w:22,h:34,r:8},  fp:{type:"side",y:65} },
+    "OnePlus Nord 4":        { w:74.0,h:162.6,t:8.0,  cam:{x:7.0,y:8.0,w:22,h:40,r:8},  fp:{type:"side",y:67} },
+    "OnePlus Nord CE 4":     { w:74.0,h:162.6,t:7.9,  cam:{x:7.5,y:9.0,w:18,h:36,r:7},  fp:{type:"side",y:67} },
+    "OnePlus Nord CE 4 Lite":{ w:75.0,h:165.3,t:7.9,  cam:{x:8.0,y:9.0,w:16,h:32,r:6},  fp:{type:"side",y:68} },
+    "OnePlus Nord CE 3":     { w:73.7,h:162.5,t:8.2,  cam:{x:7.5,y:9.0,w:18,h:34,r:7},  fp:{type:"side",y:66} },
+    "OnePlus Nord 3":        { w:74.0,h:162.4,t:8.1,  cam:{x:7.0,y:8.0,w:20,h:38,r:8},  fp:{type:"side",y:66} },
+    "OnePlus Nord CE 3 Lite":{ w:73.7,h:165.7,t:8.3,  cam:{x:8.0,y:9.0,w:16,h:32,r:6},  fp:{type:"side",y:68} },
+    "OnePlus Nord 2T":       { w:73.0,h:159.1,t:8.5,  cam:{x:6.5,y:7.5,w:22,h:36,r:8},  fp:{type:"side",y:64} },
+    "OnePlus Nord CE 2":     { w:73.5,h:159.2,t:7.8,  cam:{x:7.5,y:8.5,w:18,h:34,r:7},  fp:{type:"side",y:64} },
+    "OnePlus Nord CE 2 Lite":{ w:73.5,h:163.3,t:8.3,  cam:{x:8.0,y:9.0,w:16,h:30,r:6},  fp:{type:"side",y:67} },
+    "OnePlus Ace 3 Pro":     { w:75.1,h:162.0,t:9.4,  cam:{x:5.0,y:6.0,w:32,h:38,r:11}, fp:{type:"udp"} },
+    "OnePlus Ace 3":         { w:74.9,h:161.6,t:8.8,  cam:{x:5.5,y:6.5,w:28,h:36,r:10}, fp:{type:"udp"} },
+    "OnePlus Ace 2 Pro":     { w:75.2,h:163.0,t:9.3,  cam:{x:5.0,y:6.0,w:30,h:36,r:11}, fp:{type:"udp"} },
+    "OnePlus Ace 2V":        { w:74.2,h:161.5,t:8.1,  cam:{x:6.5,y:7.5,w:22,h:36,r:8},  fp:{type:"side",y:66} },
   },
   Xiaomi: {
-    "Xiaomi 14 Ultra":  { w: 75.3, h: 161.4, t: 9.35 },
-    "Xiaomi 14 Pro":    { w: 74.9, h: 160.9, t: 9.55 },
-    "Xiaomi 14":        { w: 71.5, h: 152.8, t: 8.2  },
-    "Xiaomi 13T Pro":   { w: 75.0, h: 162.2, t: 8.49 },
-    "Xiaomi 13T":       { w: 75.0, h: 162.2, t: 8.49 },
-    "Xiaomi 13 Pro":    { w: 74.6, h: 162.9, t: 8.38 },
-    "Xiaomi 13":        { w: 71.5, h: 152.8, t: 8.0  },
-    "Xiaomi 12 Pro":    { w: 74.6, h: 163.6, t: 8.16 },
-    "Xiaomi 12":        { w: 69.9, h: 152.7, t: 8.16 },
+    "Xiaomi 14 Ultra":   { w:75.3,h:161.4,t:9.35, cam:{x:3.0,y:3.5,w:50,h:50,r:18}, fp:{type:"udp"} },
+    "Xiaomi 14 Pro":     { w:74.9,h:160.9,t:9.55, cam:{x:4.5,y:5.0,w:40,h:40,r:14}, fp:{type:"udp"} },
+    "Xiaomi 14":         { w:71.5,h:152.8,t:8.2,  cam:{x:6.0,y:7.0,w:22,h:38,r:8},  fp:{type:"udp"} },
+    "Xiaomi 14T Pro":    { w:75.1,h:160.5,t:8.39, cam:{x:4.5,y:5.0,w:38,h:38,r:12}, fp:{type:"udp"} },
+    "Xiaomi 14T":        { w:75.1,h:160.5,t:7.8,  cam:{x:5.0,y:6.0,w:34,h:34,r:10}, fp:{type:"udp"} },
+    "Xiaomi 13T Pro":    { w:75.0,h:162.2,t:8.49, cam:{x:5.0,y:6.0,w:34,h:34,r:10}, fp:{type:"udp"} },
+    "Xiaomi 13T":        { w:75.0,h:162.2,t:8.49, cam:{x:5.0,y:6.0,w:34,h:34,r:10}, fp:{type:"udp"} },
+    "Xiaomi 13 Pro":     { w:74.6,h:162.9,t:8.38, cam:{x:4.0,y:4.5,w:38,h:38,r:12}, fp:{type:"udp"} },
+    "Xiaomi 13":         { w:71.5,h:152.8,t:8.0,  cam:{x:6.0,y:7.0,w:22,h:36,r:8},  fp:{type:"udp"} },
+    "Xiaomi 12 Pro":     { w:74.6,h:163.6,t:8.16, cam:{x:5.0,y:5.5,w:32,h:38,r:10}, fp:{type:"udp"} },
+    "Xiaomi 12":         { w:69.9,h:152.7,t:8.16, cam:{x:6.0,y:7.0,w:20,h:34,r:8},  fp:{type:"udp"} },
+    "Xiaomi 11T Pro":      { w:76.9,h:164.1,t:8.8,  cam:{x:5.0,y:5.5,w:30,h:36,r:10}, fp:{type:"udp"} },
+    "Xiaomi 11T":          { w:76.9,h:164.1,t:8.8,  cam:{x:5.0,y:5.5,w:28,h:34,r:10}, fp:{type:"side",y:67} },
+    "Xiaomi 11 Lite 5G":   { w:75.7,h:160.5,t:6.81, cam:{x:7.0,y:8.0,w:20,h:36,r:7},  fp:{type:"side",y:65} },
+    "Xiaomi Civi 4 Pro":   { w:73.9,h:159.2,t:7.46, cam:{x:6.5,y:7.0,w:24,h:36,r:8},  fp:{type:"udp"} },
+    "Xiaomi Civi 3":       { w:73.8,h:160.0,t:7.24, cam:{x:7.0,y:7.5,w:20,h:34,r:7},  fp:{type:"udp"} },
+    "Xiaomi 15 Ultra":     { w:75.9,h:164.1,t:9.45, cam:{x:3.0,y:3.5,w:52,h:52,r:18}, fp:{type:"udp"} },
+    "Xiaomi 15 Pro":       { w:74.8,h:161.3,t:8.35, cam:{x:4.5,y:5.0,w:42,h:42,r:14}, fp:{type:"udp"} },
+    "Xiaomi 15":           { w:71.4,h:151.9,t:8.08, cam:{x:5.5,y:6.0,w:34,h:34,r:11}, fp:{type:"udp"} },
+    "Xiaomi 12T Pro":      { w:75.9,h:163.1,t:8.65, cam:{x:5.0,y:5.5,w:32,h:38,r:10}, fp:{type:"side",y:67} },
+    "Xiaomi 12T":          { w:75.9,h:163.1,t:8.65, cam:{x:5.5,y:6.0,w:28,h:34,r:9},  fp:{type:"side",y:67} },
+    "Xiaomi 12S Ultra":    { w:74.2,h:163.2,t:9.06, cam:{x:3.5,y:4.0,w:50,h:50,r:18}, fp:{type:"udp"} },
+    "Xiaomi MIX Fold 4":   { w:85.3,h:157.8,t:10.4, cam:{x:4.5,y:5.0,w:48,h:48,r:16}, fp:{type:"udp"} },
+    "Xiaomi Redmi Turbo 3":{ w:75.1,h:161.3,t:8.1,  cam:{x:5.5,y:6.5,w:28,h:36,r:10}, fp:{type:"side",y:66} },
+    "Xiaomi Note 12 Turbo":{ w:74.2,h:161.5,t:8.01, cam:{x:6.0,y:7.0,w:24,h:38,r:9},  fp:{type:"side",y:66} },
   },
   Redmi: {
-    "Redmi Note 13 Pro+":  { w: 76.0, h: 161.4, t: 8.9  },
-    "Redmi Note 13 Pro":   { w: 76.0, h: 161.4, t: 8.0  },
-    "Redmi Note 13":       { w: 76.0, h: 161.4, t: 7.6  },
-    "Redmi Note 12 Pro+":  { w: 76.0, h: 162.9, t: 8.7  },
-    "Redmi Note 12 Pro":   { w: 76.0, h: 162.9, t: 8.03 },
-    "Redmi Note 12":       { w: 73.9, h: 159.9, t: 7.98 },
-    "Redmi 13C":           { w: 75.6, h: 167.2, t: 8.1  },
-    "Redmi 12":            { w: 76.3, h: 167.6, t: 8.17 },
-    "Redmi 12C":           { w: 76.6, h: 168.8, t: 8.77 },
-    "Redmi A2+":           { w: 75.9, h: 166.8, t: 8.9  },
+    "Redmi Note 13 Pro+":  { w:76.0,h:161.4,t:8.9,  cam:{x:7.5,y:8.5,w:14,h:40,r:6},  fp:{type:"side",y:66} },
+    "Redmi Note 13 Pro":   { w:76.0,h:161.4,t:8.0,  cam:{x:7.5,y:8.5,w:14,h:38,r:6},  fp:{type:"side",y:66} },
+    "Redmi Note 13 5G":    { w:76.0,h:161.4,t:7.6,  cam:{x:8.0,y:9.0,w:13,h:34,r:5},  fp:{type:"side",y:66} },
+    "Redmi Note 13":       { w:76.0,h:161.4,t:7.6,  cam:{x:8.0,y:9.0,w:13,h:34,r:5},  fp:{type:"side",y:66} },
+    "Redmi Note 12 Pro+":  { w:76.0,h:162.9,t:8.7,  cam:{x:7.5,y:8.5,w:13,h:38,r:6},  fp:{type:"side",y:67} },
+    "Redmi Note 12 Pro":   { w:76.0,h:162.9,t:8.03, cam:{x:7.5,y:8.5,w:13,h:36,r:6},  fp:{type:"side",y:67} },
+    "Redmi Note 12":       { w:73.9,h:159.9,t:7.98, cam:{x:8.0,y:9.0,w:12,h:32,r:5},  fp:{type:"side",y:65} },
+    "Redmi Note 11 Pro+":  { w:76.1,h:164.2,t:8.12, cam:{x:7.5,y:8.5,w:13,h:36,r:6},  fp:{type:"side",y:67} },
+    "Redmi Note 11 Pro":   { w:76.1,h:164.2,t:8.12, cam:{x:7.5,y:8.5,w:13,h:34,r:6},  fp:{type:"side",y:67} },
+    "Redmi Note 11":       { w:73.9,h:159.9,t:8.09, cam:{x:8.0,y:9.0,w:12,h:30,r:5},  fp:{type:"side",y:65} },
+    "Redmi 13C":           { w:75.6,h:167.2,t:8.1,  cam:{x:8.5,y:9.5,w:12,h:30,r:5},  fp:{type:"rear",x:37.8,y:115,r:4} },
+    "Redmi 12":            { w:76.3,h:167.6,t:8.17, cam:{x:8.5,y:9.5,w:12,h:30,r:5},  fp:{type:"side",y:70} },
+    "Redmi 12C":           { w:76.6,h:168.8,t:8.77, cam:{x:8.5,y:9.5,w:12,h:28,r:5},  fp:{type:"rear",x:38.3,y:115,r:4} },
+    "Redmi A2+":           { w:75.9,h:166.8,t:8.9,  cam:{x:8.5,y:9.5,w:11,h:26,r:4},  fp:{type:"rear",x:37.9,y:113,r:4} },
+    "Redmi A3":            { w:76.3,h:167.1,t:8.3,  cam:{x:8.5,y:9.5,w:11,h:26,r:4},  fp:{type:"side",y:69} },
   },
   POCO: {
-    "POCO X6 Pro": { w: 74.3, h: 160.5, t: 8.26 },
-    "POCO X6":     { w: 74.3, h: 160.5, t: 8.0  },
-    "POCO X5 Pro": { w: 76.7, h: 162.0, t: 8.01 },
-    "POCO X5":     { w: 76.7, h: 162.9, t: 8.08 },
-    "POCO F5 Pro": { w: 74.2, h: 162.8, t: 8.49 },
-    "POCO F5":     { w: 74.2, h: 158.9, t: 7.9  },
-    "POCO F4":     { w: 73.9, h: 163.2, t: 7.7  },
-    "POCO M6 Pro": { w: 75.2, h: 162.6, t: 8.3  },
-    "POCO M5s":    { w: 76.6, h: 163.1, t: 8.09 },
+    "POCO X6 Pro":  { w:74.3,h:160.5,t:8.26, cam:{x:6.5,y:7.5,w:20,h:38,r:8},  fp:{type:"udp"} },
+    "POCO X6":      { w:74.3,h:160.5,t:8.0,  cam:{x:7.0,y:8.0,w:18,h:36,r:7},  fp:{type:"side",y:65} },
+    "POCO X5 Pro":  { w:76.7,h:162.0,t:8.01, cam:{x:7.5,y:8.5,w:16,h:36,r:6},  fp:{type:"side",y:66} },
+    "POCO X5":      { w:76.7,h:162.9,t:8.08, cam:{x:7.5,y:8.5,w:15,h:34,r:6},  fp:{type:"side",y:66} },
+    "POCO X4 Pro":  { w:76.1,h:164.5,t:8.1,  cam:{x:7.5,y:8.5,w:15,h:34,r:6},  fp:{type:"side",y:67} },
+    "POCO F5 Pro":  { w:74.2,h:162.8,t:8.49, cam:{x:6.0,y:7.0,w:22,h:38,r:8},  fp:{type:"udp"} },
+    "POCO F5":      { w:74.2,h:158.9,t:7.9,  cam:{x:7.0,y:8.0,w:18,h:36,r:7},  fp:{type:"side",y:64} },
+    "POCO F4":      { w:73.9,h:163.2,t:7.7,  cam:{x:7.0,y:8.0,w:16,h:34,r:6},  fp:{type:"side",y:67} },
+    "POCO F4 GT":   { w:76.7,h:162.5,t:8.5,  cam:{x:7.0,y:8.0,w:16,h:34,r:6},  fp:{type:"side",y:66} },
+    "POCO M6 Pro":  { w:75.2,h:162.6,t:8.3,  cam:{x:8.0,y:9.0,w:13,h:32,r:5},  fp:{type:"side",y:66} },
+    "POCO M6":      { w:76.8,h:168.2,t:8.3,  cam:{x:8.0,y:9.0,w:12,h:28,r:5},  fp:{type:"rear",x:38.4,y:114,r:4} },
+    "POCO M5s":     { w:76.6,h:163.1,t:8.09, cam:{x:8.0,y:9.0,w:12,h:30,r:5},  fp:{type:"side",y:66} },
+    "POCO C65":     { w:76.8,h:168.2,t:8.3,  cam:{x:8.0,y:9.5,w:11,h:26,r:4},  fp:{type:"rear",x:38.4,y:114,r:4} },
   },
   OPPO: {
-    "OPPO Reno 12 Pro":  { w: 74.7, h: 161.5, t: 8.0  },
-    "OPPO Reno 12":      { w: 74.7, h: 161.5, t: 7.4  },
-    "OPPO Reno 11 Pro":  { w: 74.2, h: 161.5, t: 8.02 },
-    "OPPO Reno 11":      { w: 74.2, h: 161.5, t: 7.93 },
-    "OPPO Reno 10 Pro+": { w: 74.2, h: 161.5, t: 8.96 },
-    "OPPO F25 Pro":      { w: 75.4, h: 161.7, t: 7.52 },
-    "OPPO A79":          { w: 75.6, h: 164.3, t: 7.99 },
-    "OPPO A58":          { w: 75.6, h: 164.3, t: 8.0  },
-    "OPPO A38":          { w: 75.6, h: 163.7, t: 7.99 },
+    "OPPO Find X8 Pro":    { w:76.0,h:162.8,t:9.1,  cam:{x:4.0,y:4.5,w:44,h:44,r:15}, fp:{type:"udp"} },
+    "OPPO Find X8":        { w:74.9,h:161.1,t:8.24, cam:{x:4.5,y:5.0,w:38,h:38,r:13}, fp:{type:"udp"} },
+    "OPPO Find X7 Ultra":  { w:75.1,h:163.5,t:9.5,  cam:{x:3.5,y:4.0,w:48,h:48,r:16}, fp:{type:"udp"} },
+    "OPPO Find X7":        { w:74.9,h:161.6,t:9.0,  cam:{x:4.5,y:5.0,w:38,h:38,r:13}, fp:{type:"udp"} },
+    "OPPO Find X6 Pro":    { w:74.9,h:162.5,t:9.11, cam:{x:4.0,y:4.5,w:44,h:44,r:15}, fp:{type:"udp"} },
+    "OPPO Find N3 Flip":   { w:75.8,h:166.2,t:7.84, cam:{x:6.5,y:7.0,w:22,h:38,r:8},  fp:{type:"side",y:68} },
+    "OPPO Reno 13 Pro":    { w:74.7,h:161.5,t:7.9,  cam:{x:6.0,y:7.0,w:24,h:42,r:9},  fp:{type:"udp"} },
+    "OPPO Reno 13":        { w:74.7,h:161.5,t:7.4,  cam:{x:7.0,y:8.0,w:20,h:38,r:7},  fp:{type:"udp"} },
+    "OPPO Reno 12 Pro":    { w:74.7,h:161.5,t:8.0,  cam:{x:6.5,y:7.5,w:22,h:40,r:8},  fp:{type:"udp"} },
+    "OPPO Reno 12":        { w:74.7,h:161.5,t:7.4,  cam:{x:7.0,y:8.0,w:18,h:36,r:7},  fp:{type:"udp"} },
+    "OPPO Reno 12F":       { w:74.7,h:162.0,t:7.5,  cam:{x:7.5,y:8.5,w:16,h:32,r:6},  fp:{type:"side",y:66} },
+    "OPPO Reno 11 Pro":    { w:74.2,h:161.5,t:8.02, cam:{x:6.5,y:7.5,w:22,h:40,r:8},  fp:{type:"udp"} },
+    "OPPO Reno 11":        { w:74.2,h:161.5,t:7.93, cam:{x:7.0,y:8.0,w:18,h:36,r:7},  fp:{type:"udp"} },
+    "OPPO Reno 11F":       { w:74.2,h:162.0,t:7.6,  cam:{x:7.5,y:8.5,w:16,h:30,r:6},  fp:{type:"side",y:66} },
+    "OPPO Reno 10 Pro+":   { w:74.2,h:161.5,t:8.96, cam:{x:6.0,y:7.0,w:24,h:42,r:9},  fp:{type:"udp"} },
+    "OPPO Reno 10 Pro":    { w:74.2,h:161.5,t:8.2,  cam:{x:6.5,y:7.5,w:22,h:40,r:8},  fp:{type:"udp"} },
+    "OPPO Reno 10":        { w:74.2,h:161.5,t:7.9,  cam:{x:7.0,y:8.0,w:18,h:36,r:7},  fp:{type:"udp"} },
+    "OPPO Reno 8 Pro":     { w:74.2,h:161.5,t:7.99, cam:{x:7.0,y:7.5,w:20,h:38,r:8},  fp:{type:"udp"} },
+    "OPPO Reno 8":         { w:74.1,h:161.5,t:7.99, cam:{x:7.5,y:8.5,w:17,h:34,r:7},  fp:{type:"udp"} },
+    "OPPO Reno 8T":        { w:74.1,h:162.7,t:8.0,  cam:{x:7.0,y:8.0,w:18,h:36,r:7},  fp:{type:"side",y:67} },
+    "OPPO F27 Pro+":       { w:75.5,h:162.3,t:7.72, cam:{x:7.0,y:8.0,w:18,h:34,r:7},  fp:{type:"udp"} },
+    "OPPO F27 Pro":        { w:75.4,h:162.1,t:7.7,  cam:{x:7.0,y:8.0,w:18,h:34,r:7},  fp:{type:"udp"} },
+    "OPPO F25 Pro":        { w:75.4,h:161.7,t:7.52, cam:{x:7.0,y:8.0,w:18,h:36,r:7},  fp:{type:"udp"} },
+    "OPPO F23":            { w:75.6,h:162.7,t:7.99, cam:{x:7.5,y:8.5,w:16,h:30,r:6},  fp:{type:"side",y:67} },
+    "OPPO A3 Pro":         { w:75.0,h:162.6,t:7.5,  cam:{x:7.5,y:8.5,w:16,h:30,r:6},  fp:{type:"side",y:66} },
+    "OPPO A79 5G":         { w:75.6,h:164.3,t:7.99, cam:{x:8.0,y:9.0,w:14,h:32,r:5},  fp:{type:"side",y:68} },
+    "OPPO A78 5G":         { w:74.7,h:163.8,t:8.0,  cam:{x:8.0,y:9.0,w:14,h:30,r:5},  fp:{type:"side",y:67} },
+    "OPPO A58 5G":         { w:75.6,h:164.3,t:8.0,  cam:{x:8.0,y:9.0,w:14,h:30,r:5},  fp:{type:"side",y:68} },
+    "OPPO A38":            { w:75.6,h:163.7,t:7.99, cam:{x:8.0,y:9.0,w:14,h:28,r:5},  fp:{type:"side",y:67} },
+    "OPPO A17":            { w:74.1,h:163.8,t:8.3,  cam:{x:8.0,y:9.0,w:13,h:26,r:5},  fp:{type:"rear",x:37.0,y:112,r:4} },
+    "OPPO A16":            { w:75.6,h:163.7,t:8.4,  cam:{x:8.5,y:9.5,w:12,h:24,r:4},  fp:{type:"rear",x:37.8,y:112,r:4} },
   },
   Realme: {
-    "Realme GT 6":        { w: 74.2, h: 162.0, t: 8.0  },
-    "Realme GT 5 Pro":    { w: 74.2, h: 162.5, t: 9.0  },
-    "Realme 12 Pro+":     { w: 76.1, h: 161.5, t: 8.78 },
-    "Realme 12 Pro":      { w: 76.1, h: 161.5, t: 7.99 },
-    "Realme 12+":         { w: 76.1, h: 161.6, t: 7.8  },
-    "Realme 12":          { w: 75.1, h: 161.3, t: 7.95 },
-    "Realme Narzo 70 Pro": { w: 75.6, h: 162.5, t: 8.1 },
-    "Realme Narzo 70":    { w: 75.6, h: 162.5, t: 7.99 },
-    "Realme C65":         { w: 76.0, h: 165.0, t: 7.79 },
-    "Realme C55":         { w: 74.9, h: 162.9, t: 7.89 },
+    "Realme GT 7 Pro":       { w:74.5,h:162.5,t:8.5,  cam:{x:4.5,y:5.0,w:40,h:40,r:13}, fp:{type:"udp"} },
+    "Realme GT 7":           { w:74.6,h:162.0,t:7.9,  cam:{x:5.5,y:6.5,w:30,h:38,r:11}, fp:{type:"udp"} },
+    "Realme GT 6T":          { w:74.2,h:162.0,t:8.0,  cam:{x:5.5,y:6.5,w:28,h:38,r:10}, fp:{type:"udp"} },
+    "Realme GT 6":           { w:74.2,h:162.0,t:8.0,  cam:{x:5.5,y:6.5,w:28,h:38,r:10}, fp:{type:"udp"} },
+    "Realme GT 5 Pro":       { w:74.2,h:162.5,t:9.0,  cam:{x:5.0,y:6.0,w:32,h:40,r:12}, fp:{type:"udp"} },
+    "Realme GT 5":           { w:74.2,h:162.5,t:8.9,  cam:{x:5.0,y:6.0,w:30,h:38,r:11}, fp:{type:"udp"} },
+    "Realme GT Neo 6":       { w:74.2,h:161.5,t:8.0,  cam:{x:6.0,y:7.0,w:24,h:38,r:9},  fp:{type:"udp"} },
+    "Realme GT Neo 6 SE":    { w:74.2,h:161.5,t:7.8,  cam:{x:6.5,y:7.5,w:22,h:36,r:8},  fp:{type:"udp"} },
+    "Realme GT Neo 5":       { w:74.2,h:161.5,t:8.9,  cam:{x:6.0,y:7.0,w:24,h:38,r:9},  fp:{type:"udp"} },
+    "Realme GT Neo 5 SE":    { w:74.2,h:161.5,t:8.0,  cam:{x:6.5,y:7.5,w:22,h:36,r:8},  fp:{type:"udp"} },
+    "Realme GT Neo 3":       { w:74.2,h:162.5,t:8.2,  cam:{x:6.0,y:7.0,w:24,h:38,r:9},  fp:{type:"udp"} },
+    "Realme GT Neo 3T":      { w:74.2,h:162.5,t:8.4,  cam:{x:6.5,y:7.5,w:22,h:36,r:8},  fp:{type:"side",y:67} },
+    "Realme 13 Pro+":        { w:74.7,h:161.5,t:8.1,  cam:{x:6.0,y:7.0,w:24,h:40,r:9},  fp:{type:"udp"} },
+    "Realme 13 Pro":         { w:74.7,h:161.5,t:7.9,  cam:{x:6.5,y:7.5,w:20,h:36,r:7},  fp:{type:"udp"} },
+    "Realme 13+":            { w:76.1,h:161.6,t:7.8,  cam:{x:7.5,y:8.5,w:16,h:34,r:6},  fp:{type:"side",y:66} },
+    "Realme 13":             { w:75.1,h:161.3,t:7.95, cam:{x:7.5,y:8.5,w:15,h:32,r:6},  fp:{type:"side",y:66} },
+    "Realme 12 Pro+":        { w:76.1,h:161.5,t:8.78, cam:{x:6.5,y:7.5,w:22,h:38,r:8},  fp:{type:"udp"} },
+    "Realme 12 Pro":         { w:76.1,h:161.5,t:7.99, cam:{x:7.0,y:8.0,w:18,h:36,r:7},  fp:{type:"udp"} },
+    "Realme 12+":            { w:76.1,h:161.6,t:7.8,  cam:{x:7.5,y:8.5,w:16,h:34,r:6},  fp:{type:"side",y:66} },
+    "Realme 12":             { w:75.1,h:161.3,t:7.95, cam:{x:7.5,y:8.5,w:15,h:32,r:6},  fp:{type:"side",y:66} },
+    "Realme 11 Pro+":        { w:74.2,h:161.5,t:8.2,  cam:{x:5.5,y:6.5,w:28,h:36,r:10}, fp:{type:"udp"} },
+    "Realme 11 Pro":         { w:74.2,h:161.5,t:7.9,  cam:{x:6.0,y:7.0,w:22,h:34,r:8},  fp:{type:"udp"} },
+    "Realme 11":             { w:73.9,h:163.4,t:7.8,  cam:{x:7.5,y:8.5,w:15,h:30,r:5},  fp:{type:"side",y:67} },
+    "Realme 11x":            { w:76.1,h:166.6,t:8.1,  cam:{x:8.0,y:9.0,w:13,h:28,r:5},  fp:{type:"side",y:69} },
+    "Realme 10 Pro+":        { w:74.2,h:161.5,t:8.4,  cam:{x:6.0,y:7.0,w:22,h:36,r:8},  fp:{type:"udp"} },
+    "Realme 10 Pro":         { w:74.2,h:161.5,t:7.99, cam:{x:7.0,y:8.0,w:18,h:32,r:7},  fp:{type:"side",y:66} },
+    "Realme 10":             { w:74.2,h:164.1,t:8.0,  cam:{x:8.0,y:9.0,w:14,h:28,r:5},  fp:{type:"side",y:67} },
+    "Realme Narzo 70 Turbo": { w:75.6,h:162.5,t:7.9,  cam:{x:6.5,y:7.5,w:18,h:36,r:7},  fp:{type:"side",y:66} },
+    "Realme Narzo 70 Pro":   { w:75.6,h:162.5,t:8.1,  cam:{x:7.0,y:8.0,w:16,h:34,r:6},  fp:{type:"udp"} },
+    "Realme Narzo 70":       { w:75.6,h:162.5,t:7.99, cam:{x:7.5,y:8.5,w:15,h:30,r:5},  fp:{type:"side",y:66} },
+    "Realme Narzo 60 Pro":   { w:75.6,h:162.5,t:7.99, cam:{x:6.5,y:7.5,w:18,h:34,r:7},  fp:{type:"udp"} },
+    "Realme Narzo 60":       { w:75.6,h:162.5,t:7.9,  cam:{x:7.5,y:8.5,w:15,h:28,r:5},  fp:{type:"side",y:66} },
+    "Realme Narzo 60x":      { w:76.8,h:167.8,t:8.1,  cam:{x:8.0,y:9.0,w:13,h:26,r:5},  fp:{type:"side",y:69} },
+    "Realme C67 5G":         { w:76.0,h:165.7,t:7.99, cam:{x:8.0,y:9.0,w:13,h:26,r:5},  fp:{type:"side",y:68} },
+    "Realme C65":            { w:76.0,h:165.0,t:7.79, cam:{x:8.0,y:9.0,w:13,h:28,r:5},  fp:{type:"rear",x:38.0,y:113,r:4} },
+    "Realme C63":            { w:75.6,h:166.4,t:7.69, cam:{x:8.0,y:9.0,w:12,h:26,r:4},  fp:{type:"side",y:68} },
+    "Realme C55":            { w:74.9,h:162.9,t:7.89, cam:{x:7.5,y:8.5,w:22,h:22,r:8},  fp:{type:"side",y:66} },
+    "Realme C53":            { w:74.4,h:167.3,t:7.99, cam:{x:8.0,y:9.0,w:14,h:24,r:5},  fp:{type:"side",y:69} },
+    "Realme C51":            { w:75.1,h:167.9,t:8.1,  cam:{x:8.0,y:9.0,w:13,h:22,r:4},  fp:{type:"rear",x:37.5,y:114,r:4} },
+    "Realme C35":            { w:75.6,h:164.4,t:8.1,  cam:{x:8.0,y:9.0,w:13,h:24,r:4},  fp:{type:"side",y:67} },
   },
   Vivo: {
-    "Vivo X100 Pro":  { w: 75.3, h: 164.1, t: 9.5  },
-    "Vivo X100":      { w: 75.0, h: 163.0, t: 9.1  },
-    "Vivo V30 Pro":   { w: 74.0, h: 163.3, t: 7.46 },
-    "Vivo V30":       { w: 74.0, h: 163.3, t: 7.25 },
-    "Vivo V29 Pro":   { w: 73.9, h: 162.6, t: 7.94 },
-    "Vivo T3x":       { w: 77.0, h: 168.0, t: 8.09 },
-    "Vivo Y200 Pro":  { w: 75.1, h: 163.6, t: 7.69 },
-    "Vivo Y100":      { w: 74.5, h: 162.5, t: 7.79 },
-    "Vivo Y36":       { w: 74.8, h: 163.5, t: 7.85 },
+    "Vivo X100 Ultra": { w:75.8,h:164.9,t:9.8,  cam:{x:3.5,y:4.0,w:48,h:48,r:16}, fp:{type:"udp"} },
+    "Vivo X100 Pro":   { w:75.3,h:164.1,t:9.5,  cam:{x:4.0,y:4.5,w:44,h:44,r:15}, fp:{type:"udp"} },
+    "Vivo X100":       { w:75.0,h:163.0,t:9.1,  cam:{x:4.5,y:5.0,w:38,h:38,r:12}, fp:{type:"udp"} },
+    "Vivo V30 Pro":    { w:74.0,h:163.3,t:7.46, cam:{x:6.0,y:7.0,w:24,h:40,r:9},  fp:{type:"udp"} },
+    "Vivo V30":        { w:74.0,h:163.3,t:7.25, cam:{x:6.5,y:7.5,w:20,h:38,r:8},  fp:{type:"udp"} },
+    "Vivo V29 Pro":    { w:73.9,h:162.6,t:7.94, cam:{x:6.5,y:7.5,w:22,h:38,r:8},  fp:{type:"udp"} },
+    "Vivo V29":        { w:74.2,h:163.2,t:7.39, cam:{x:7.0,y:8.0,w:20,h:36,r:7},  fp:{type:"udp"} },
+    "Vivo T3x":        { w:77.0,h:168.0,t:8.09, cam:{x:7.5,y:8.5,w:14,h:32,r:5},  fp:{type:"side",y:70} },
+    "Vivo T3 Pro":     { w:74.5,h:163.6,t:7.69, cam:{x:6.5,y:7.5,w:18,h:36,r:7},  fp:{type:"side",y:67} },
+    "Vivo Y200 Pro":   { w:75.1,h:163.6,t:7.69, cam:{x:7.5,y:8.5,w:16,h:32,r:6},  fp:{type:"side",y:67} },
+    "Vivo Y200":       { w:74.5,h:162.5,t:7.79, cam:{x:7.5,y:8.5,w:15,h:30,r:5},  fp:{type:"side",y:66} },
+    "Vivo Y100":       { w:74.5,h:162.5,t:7.79, cam:{x:7.5,y:8.5,w:15,h:28,r:5},  fp:{type:"side",y:66} },
+    "Vivo Y27":        { w:76.4,h:164.1,t:8.19, cam:{x:8.0,y:9.0,w:14,h:26,r:5},  fp:{type:"side",y:67} },
+    "Vivo Y16":        { w:76.8,h:164.3,t:8.04, cam:{x:8.0,y:9.0,w:13,h:24,r:4},  fp:{type:"rear",x:38.4,y:112,r:4} },
   },
   Motorola: {
-    "Edge 50 Ultra":  { w: 74.0, h: 161.1, t: 8.59 },
-    "Edge 50 Pro":    { w: 72.4, h: 158.4, t: 8.19 },
-    "Edge 50":        { w: 73.0, h: 161.6, t: 7.99 },
-    "Edge 50 Fusion": { w: 72.0, h: 160.9, t: 7.8  },
-    "Moto G85":       { w: 72.2, h: 161.7, t: 7.59 },
-    "Moto G64":       { w: 76.0, h: 163.5, t: 7.99 },
-    "Moto G54":       { w: 76.0, h: 163.5, t: 7.99 },
-    "Moto G34":       { w: 76.6, h: 166.9, t: 8.29 },
-    "Moto G14":       { w: 76.6, h: 166.9, t: 8.29 },
-    "Moto E13":       { w: 74.8, h: 164.9, t: 9.0  },
+    "Edge 50 Ultra":   { w:74.0,h:161.1,t:8.59, cam:{x:5.5,y:6.0,w:28,h:42,r:10}, fp:{type:"udp"} },
+    "Edge 50 Pro":     { w:72.4,h:158.4,t:8.19, cam:{x:6.0,y:7.0,w:24,h:38,r:9},  fp:{type:"udp"} },
+    "Edge 50":         { w:73.0,h:161.6,t:7.99, cam:{x:6.5,y:7.5,w:22,h:36,r:8},  fp:{type:"udp"} },
+    "Edge 50 Fusion":  { w:72.0,h:160.9,t:7.8,  cam:{x:6.5,y:7.5,w:20,h:34,r:7},  fp:{type:"udp"} },
+    "Edge 50 Neo":     { w:71.6,h:155.8,t:8.1,  cam:{x:7.0,y:8.0,w:18,h:32,r:7},  fp:{type:"udp"} },
+    "Moto G85":        { w:72.2,h:161.7,t:7.59, cam:{x:7.0,y:8.0,w:18,h:34,r:7},  fp:{type:"side",y:66} },
+    "Moto G84":        { w:72.2,h:161.7,t:7.59, cam:{x:7.0,y:8.0,w:16,h:32,r:6},  fp:{type:"side",y:66} },
+    "Moto G64":        { w:76.0,h:163.5,t:7.99, cam:{x:7.5,y:8.5,w:16,h:32,r:6},  fp:{type:"side",y:67} },
+    "Moto G54":        { w:76.0,h:163.5,t:7.99, cam:{x:7.5,y:8.5,w:15,h:30,r:5},  fp:{type:"side",y:67} },
+    "Moto G34":        { w:76.6,h:166.9,t:8.29, cam:{x:8.0,y:9.0,w:13,h:26,r:5},  fp:{type:"side",y:69} },
+    "Moto G24":        { w:76.6,h:166.9,t:8.29, cam:{x:8.0,y:9.0,w:13,h:24,r:5},  fp:{type:"rear",x:38.3,y:113,r:4} },
+    "Moto G14":        { w:76.6,h:166.9,t:8.29, cam:{x:8.0,y:9.0,w:12,h:24,r:4},  fp:{type:"rear",x:38.3,y:112,r:4} },
+    "Moto E13":        { w:74.8,h:164.9,t:9.0,  cam:{x:8.0,y:9.0,w:11,h:22,r:4},  fp:{type:"rear",x:37.4,y:112,r:4} },
+    "Moto E40":        { w:75.9,h:165.1,t:9.0,  cam:{x:7.5,y:8.5,w:12,h:24,r:4},  fp:{type:"rear",x:37.9,y:112,r:4} },
   },
   Nothing: {
-    "Phone (2a) Plus": { w: 76.3, h: 162.1, t: 8.55 },
-    "Phone (2a)":      { w: 76.3, h: 162.1, t: 8.55 },
-    "Phone (2)":       { w: 76.4, h: 162.1, t: 8.6  },
-    "Phone (1)":       { w: 75.8, h: 159.2, t: 8.3  },
-    "CMF Phone 1":     { w: 76.7, h: 163.9, t: 7.8  },
+    "Phone (2a) Plus": { w:76.3,h:162.1,t:8.55, cam:{x:7.0,y:8.0,w:16,h:36,r:7},  fp:{type:"side",y:66} },
+    "Phone (2a)":      { w:76.3,h:162.1,t:8.55, cam:{x:7.0,y:8.0,w:16,h:36,r:7},  fp:{type:"side",y:66} },
+    "Phone (2)":       { w:76.4,h:162.1,t:8.6,  cam:{x:6.5,y:7.5,w:20,h:38,r:8},  fp:{type:"side",y:66} },
+    "Phone (1)":       { w:75.8,h:159.2,t:8.3,  cam:{x:7.0,y:8.0,w:18,h:36,r:7},  fp:{type:"side",y:64} },
+    "CMF Phone 1":     { w:76.7,h:163.9,t:7.8,  cam:{x:7.5,y:8.5,w:15,h:30,r:5},  fp:{type:"side",y:67} },
   },
   "Google Pixel": {
-    "Pixel 9 Pro XL": { w: 76.6, h: 162.8, t: 8.5 },
-    "Pixel 9 Pro":    { w: 72.0, h: 152.8, t: 8.5 },
-    "Pixel 9":        { w: 72.0, h: 152.8, t: 8.5 },
-    "Pixel 8 Pro":    { w: 75.9, h: 162.6, t: 8.8 },
-    "Pixel 8":        { w: 70.8, h: 150.5, t: 8.9 },
-    "Pixel 8a":       { w: 72.7, h: 154.4, t: 8.9 },
-    "Pixel 7a":       { w: 72.9, h: 152.4, t: 9.0 },
-    "Pixel 7 Pro":    { w: 76.6, h: 162.9, t: 8.9 },
-    "Pixel 7":        { w: 73.2, h: 155.6, t: 8.7 },
-    "Pixel 6a":       { w: 71.8, h: 152.2, t: 8.9 },
+    "Pixel 9 Pro XL":   { w:76.6,h:162.8,t:8.5, cam:{x:5.0,y:6.0,w:66,h:18,r:7},  fp:{type:"udp"} },
+    "Pixel 9 Pro Fold": { w:88.0,h:155.2,t:10.5,cam:{x:5.5,y:6.0,w:55,h:18,r:7},  fp:{type:"udp"} },
+    "Pixel 9 Pro":      { w:72.0,h:152.8,t:8.5, cam:{x:5.0,y:6.0,w:62,h:16,r:7},  fp:{type:"udp"} },
+    "Pixel 9":          { w:72.0,h:152.8,t:8.5, cam:{x:5.0,y:6.0,w:62,h:15,r:7},  fp:{type:"udp"} },
+    "Pixel 8 Pro":      { w:75.9,h:162.6,t:8.8, cam:{x:5.0,y:6.0,w:66,h:18,r:7},  fp:{type:"udp"} },
+    "Pixel 8":          { w:70.8,h:150.5,t:8.9, cam:{x:5.0,y:6.0,w:61,h:15,r:7},  fp:{type:"udp"} },
+    "Pixel 8a":         { w:72.7,h:154.4,t:8.9, cam:{x:5.0,y:6.0,w:63,h:15,r:7},  fp:{type:"udp"} },
+    "Pixel 7a":         { w:72.9,h:152.4,t:9.0, cam:{x:5.0,y:6.0,w:63,h:15,r:7},  fp:{type:"udp"} },
+    "Pixel 7 Pro":      { w:76.6,h:162.9,t:8.9, cam:{x:5.0,y:6.0,w:66,h:18,r:7},  fp:{type:"udp"} },
+    "Pixel 7":          { w:73.2,h:155.6,t:8.7, cam:{x:5.0,y:6.0,w:63,h:15,r:7},  fp:{type:"udp"} },
+    "Pixel 6a":         { w:71.8,h:152.2,t:8.9, cam:{x:5.0,y:6.0,w:62,h:14,r:7},  fp:{type:"udp"} },
+    "Pixel 6 Pro":      { w:75.9,h:163.9,t:8.9, cam:{x:5.0,y:5.5,w:66,h:18,r:7},  fp:{type:"udp"} },
+    "Pixel 6":          { w:74.8,h:158.6,t:8.9, cam:{x:5.0,y:5.5,w:65,h:15,r:7},  fp:{type:"udp"} },
+  },
+  iQOO: {
+    "iQOO 12":          { w:75.1,h:163.5,t:8.6, cam:{x:4.5,y:5.0,w:38,h:38,r:12}, fp:{type:"udp"} },
+    "iQOO 11":          { w:75.2,h:164.9,t:8.9, cam:{x:5.0,y:5.5,w:34,h:34,r:10}, fp:{type:"udp"} },
+    "iQOO Neo 9 Pro":   { w:75.1,h:163.5,t:8.6, cam:{x:5.5,y:6.5,w:28,h:38,r:10}, fp:{type:"udp"} },
+    "iQOO Neo 7 Pro":   { w:75.2,h:163.1,t:8.4, cam:{x:6.0,y:7.0,w:24,h:36,r:9},  fp:{type:"udp"} },
+    "iQOO Z9":          { w:74.7,h:162.5,t:7.98,cam:{x:7.0,y:8.0,w:18,h:34,r:7},  fp:{type:"side",y:66} },
+    "iQOO Z9x":         { w:76.8,h:167.7,t:8.0, cam:{x:8.0,y:9.0,w:14,h:28,r:5},  fp:{type:"side",y:69} },
+    "iQOO Z7 Pro":      { w:74.2,h:161.5,t:7.98,cam:{x:7.0,y:8.0,w:16,h:32,r:6},  fp:{type:"side",y:66} },
   },
 };
 
@@ -306,12 +438,86 @@ function renderA4(canvas, phone, layout, photos = [], opts = {}) {
         ctx.beginPath(); ctx.moveTo(cx, cy + dy); ctx.lineTo(cx, cy); ctx.stroke();
       });
 
+    // ── Camera & fingerprint cutout guides ────────────────────
+    // pxMm: canvas pixels per 1 mm of original phone dimension
+    // (accounts for any slot scaling in 3/4-photo layouts)
+    const pxMm = iw / phone.dims.w;
+
+    // Helper — draw a manual rounded-rect path (no ctx.roundRect needed)
+    const rrPath = (rx, ry, rw, rh, rr) => {
+      const r = Math.min(rr, rw / 2, rh / 2);
+      ctx.beginPath();
+      ctx.moveTo(rx + r, ry);
+      ctx.lineTo(rx + rw - r, ry);
+      ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + r);
+      ctx.lineTo(rx + rw, ry + rh - r);
+      ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - r, ry + rh);
+      ctx.lineTo(rx + r, ry + rh);
+      ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - r);
+      ctx.lineTo(rx, ry + r);
+      ctx.quadraticCurveTo(rx, ry, rx + r, ry);
+      ctx.closePath();
+    };
+
+    const dims = phone.dims;
+
+    // ── Camera module cutout (red dashed) ─────────────────────
+    if (dims.cam) {
+      const { x: cx, y: cy, w: cw, h: ch, r: cr = 4 } = dims.cam;
+      const px = ix + cx * pxMm, py = iy + cy * pxMm;
+      const pw = cw * pxMm,      ph = ch * pxMm;
+      const pr = cr * pxMm;
+      const lw = Math.max(0.5, sc * 0.7);
+      const fs = Math.max(4, 4.5 * sc);
+
+      ctx.save();
+      // Tinted fill
+      ctx.fillStyle = "rgba(239,68,68,0.09)";
+      rrPath(px, py, pw, ph, pr); ctx.fill();
+      // Dashed border
+      ctx.strokeStyle = "rgba(220,38,38,0.92)";
+      ctx.setLineDash([lw * 2.5, lw * 2]);
+      ctx.lineWidth = lw;
+      rrPath(px, py, pw, ph, pr); ctx.stroke();
+      ctx.setLineDash([]);
+      // Label above the module
+      ctx.fillStyle = "rgba(220,38,38,1)";
+      ctx.font = `700 ${fs}px system-ui,sans-serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+      ctx.fillText("✂ CAMERA CUT", px + pw / 2, py - lw);
+      ctx.restore();
+    }
+
+    // ── Rear fingerprint cutout (green dashed circle) ─────────
+    if (dims.fp?.type === "rear") {
+      const { x: fpx = dims.w / 2, y: fpy, r: fpr = 5 } = dims.fp;
+      const px = ix + fpx * pxMm, py = iy + fpy * pxMm;
+      const pr = fpr * pxMm;
+      const lw = Math.max(0.5, sc * 0.7);
+      const fs = Math.max(4, 4.5 * sc);
+
+      ctx.save();
+      ctx.fillStyle = "rgba(16,185,129,0.09)";
+      ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(5,150,105,0.92)";
+      ctx.setLineDash([lw * 2.5, lw * 2]);
+      ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(5,150,105,1)";
+      ctx.font = `700 ${fs}px system-ui,sans-serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+      ctx.fillText("✂ FP CUT", px, py - pr - lw);
+      ctx.restore();
+    }
+
     // ── Slot label ────────────────────────────────────────────
     ctx.fillStyle = "#9ca3af";
     ctx.font = `${Math.max(4.5, 5 * sc)}px 'Outfit',system-ui,sans-serif`;
     ctx.textAlign = "center"; ctx.textBaseline = "top";
+    const fpNote = dims.fp?.type === "udp" ? " · FP under-display" : dims.fp?.type === "side" ? " · side FP" : "";
     ctx.fillText(
-      `${phone.brand} ${phone.model}  ·  ${phone.dims.w} × ${phone.dims.h} mm  ·  cut line`,
+      `${phone.brand} ${phone.model}  ·  ${phone.dims.w}×${phone.dims.h}mm${fpNote}`,
       x + w / 2, y + h + sc * 2
     );
   });
@@ -326,17 +532,195 @@ function renderA4(canvas, phone, layout, photos = [], opts = {}) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   jsPDF DYNAMIC LOADER (CDN)
+   ZERO-DEPENDENCY PDF BUILDER
+   Builds a valid multi-page PDF by embedding JPEG images directly.
+   No CDN or external libraries needed — runs entirely in the browser.
 ═══════════════════════════════════════════════════════════════════ */
-async function loadJsPDF() {
-  if (window.jspdf) return window.jspdf;
-  return new Promise((res, rej) => {
-    const s = document.createElement("script");
-    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-    s.onload = () => res(window.jspdf);
-    s.onerror = () => rej(new Error("jsPDF load failed"));
-    document.head.appendChild(s);
-  });
+
+/**
+ * Converts a canvas to raw JPEG bytes (Uint8Array).
+ */
+function canvasToJpegBytes(canvas, quality = 0.92) {
+  const b64 = canvas.toDataURL("image/jpeg", quality).split(",")[1];
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/**
+ * Builds a PDF Blob from an array of JPEG pages.
+ * Each page is { bytes: Uint8Array, w: number, h: number } (pixel dimensions).
+ * The PDF page size is always A4 (595.28 × 841.89 pt).
+ *
+ * Object layout:
+ *   1 → Catalog
+ *   2 → Pages
+ *   3+i*3 → Page i
+ *   4+i*3 → Content stream i
+ *   5+i*3 → Image XObject i
+ */
+function buildPDF(jpegPages) {
+  const enc = new TextEncoder();
+  const chunks = [];   // Uint8Array[]
+  let pos = 0;
+
+  // Helpers ─────────────────────────────────────────────────────────
+  const writeStr = (s) => { const b = enc.encode(s); chunks.push(b); pos += b.length; };
+  const writeBin = (b) => { chunks.push(b);           pos += b.length; };
+  const curPos   = ()  => pos;
+
+  const n = jpegPages.length;
+  const PW = 595.28, PH = 841.89;                  // A4 in PDF points
+  const totalObjs = 2 + n * 3;
+  const offsets   = new Array(totalObjs + 2).fill(0);
+
+  // Header ──────────────────────────────────────────────────────────
+  writeStr("%PDF-1.4\n");
+
+  // Object 1 — Catalog ──────────────────────────────────────────────
+  offsets[1] = curPos();
+  writeStr("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+
+  // Object 2 — Pages tree ───────────────────────────────────────────
+  offsets[2] = curPos();
+  const kidsRef = Array.from({ length: n }, (_, i) => `${3 + i * 3} 0 R`).join(" ");
+  writeStr(`2 0 obj\n<< /Type /Pages /Kids [${kidsRef}] /Count ${n} >>\nendobj\n`);
+
+  // One set of 3 objects per page ───────────────────────────────────
+  for (let i = 0; i < n; i++) {
+    const { bytes: imgBytes, w: imgW, h: imgH } = jpegPages[i];
+    const pN = 3 + i * 3;   // Page dict
+    const cN = 4 + i * 3;   // Content stream
+    const mN = 5 + i * 3;   // Image XObject
+
+    // Content stream: place image with Y-flip so JPEG top-left → PDF top-left
+    // Matrix: [PW  0  0  -PH  0  PH]  scales & flips the unit square to full A4
+    const contStr  = enc.encode(`q ${PW.toFixed(2)} 0 0 ${(-PH).toFixed(2)} 0 ${PH.toFixed(2)} cm /Im${i + 1} Do Q\n`);
+
+    // Page dict
+    offsets[pN] = curPos();
+    writeStr(
+      `${pN} 0 obj\n` +
+      `<< /Type /Page /Parent 2 0 R\n` +
+      `   /MediaBox [0 0 ${PW.toFixed(2)} ${PH.toFixed(2)}]\n` +
+      `   /Contents ${cN} 0 R\n` +
+      `   /Resources << /XObject << /Im${i + 1} ${mN} 0 R >> >> >>\n` +
+      `endobj\n`
+    );
+
+    // Content stream object
+    offsets[cN] = curPos();
+    writeStr(`${cN} 0 obj\n<< /Length ${contStr.length} >>\nstream\n`);
+    writeBin(contStr);
+    writeStr("endstream\nendobj\n");
+
+    // Image XObject (JPEG, DCT-encoded)
+    offsets[mN] = curPos();
+    writeStr(
+      `${mN} 0 obj\n` +
+      `<< /Type /XObject /Subtype /Image\n` +
+      `   /Width ${imgW} /Height ${imgH}\n` +
+      `   /ColorSpace /DeviceRGB /BitsPerComponent 8\n` +
+      `   /Filter /DCTDecode /Length ${imgBytes.length} >>\n` +
+      `stream\n`
+    );
+    writeBin(imgBytes);
+    writeStr("\nendstream\nendobj\n");
+  }
+
+  // Cross-reference table ───────────────────────────────────────────
+  const xrefPos = curPos();
+  writeStr(`xref\n0 ${totalObjs + 1}\n`);
+  writeStr("0000000000 65535 f \n");
+  for (let i = 1; i <= totalObjs; i++) {
+    writeStr(`${String(offsets[i]).padStart(10, "0")} 00000 n \n`);
+  }
+
+  // Trailer ─────────────────────────────────────────────────────────
+  writeStr(
+    `trailer\n<< /Size ${totalObjs + 1} /Root 1 0 R >>\n` +
+    `startxref\n${xrefPos}\n%%EOF\n`
+  );
+
+  // Assemble final Uint8Array ───────────────────────────────────────
+  const total = chunks.reduce((s, c) => s + c.length, 0);
+  const result = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { result.set(c, off); off += c.length; }
+
+  return new Blob([result], { type: "application/pdf" });
+}
+
+/**
+ * Downloads a Blob as a named file using an anchor click.
+ */
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a   = Object.assign(document.createElement("a"), { href: url, download: filename });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/**
+ * Opens sheets in a new browser tab as a standalone print-ready HTML page.
+ * Shows instructions + "Print Now" button; @page CSS ensures exact A4.
+ * Completely avoids the sandboxed-iframe printing restriction.
+ */
+function openPrintWindow(imageSrcs) {
+  const pages = imageSrcs
+    .map(src => `<div class="pg"><img src="${src}" alt="print sheet"></div>`)
+    .join("\n");
+
+  const html = `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<title>PrintMyCase — Print Sheet</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#f0f0ee;font-family:system-ui,sans-serif}
+  .bar{background:#fff;border-bottom:1px solid #ddd;padding:12px 20px;
+       display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
+  .bar h1{font-size:15px;font-weight:700;color:#111}
+  .bar p{font-size:11px;color:#666;flex:1;line-height:1.5}
+  .bar button{padding:9px 22px;background:#6366f1;color:#fff;border:none;
+              border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
+  .warn{background:#fffbe6;border-bottom:1px solid #e6d800;
+        padding:8px 20px;font-size:11px;color:#7a6600}
+  .pg{width:210mm;height:297mm;margin:16px auto;background:#fff;
+      box-shadow:0 4px 24px rgba(0,0,0,.18);overflow:hidden}
+  .pg img{width:210mm;height:297mm;display:block}
+  @page{size:A4 portrait;margin:0}
+  @media print{
+    .bar,.warn{display:none}
+    body{background:#fff}
+    .pg{width:210mm;height:297mm;margin:0;box-shadow:none;page-break-after:always}
+    .pg:last-child{page-break-after:avoid}
+  }
+</style>
+</head><body>
+<div class="bar">
+  <span style="font-size:26px">🖨️</span>
+  <div>
+    <h1>PrintMyCase — Ready to Print</h1>
+    <p>Paper: <b>A4</b> &nbsp;·&nbsp; Scale: <b>100% / Actual Size</b> &nbsp;·&nbsp; Margins: <b>None / 0 mm</b></p>
+  </div>
+  <button onclick="window.print()">Print Now</button>
+</div>
+<div class="warn">⚠️ In the browser print dialog set Scale = <strong>100%</strong> and
+Margins = <strong>None</strong> — do NOT use "Fit to page"</div>
+${pages}
+</body></html>`;
+
+  const blob = new Blob([html], { type: "text/html" });
+  const url  = URL.createObjectURL(blob);
+  const tab  = window.open(url, "_blank");
+  if (!tab) {
+    alert("Popup blocked!\nPlease allow popups for this site, then click 'Print Directly' again.");
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -538,31 +922,50 @@ export default function PrintMyCase() {
     reader.readAsDataURL(file);
   }, []);
 
+  // ── Renders all sheets to JPEG pages, builds PDF blob, downloads ──
   const generatePDF = async () => {
     if (!phone) return;
     setPdfLoading(true);
     try {
-      const { jsPDF } = await loadJsPDF();
-      const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
-      const pxmm = 300 / 25.4; // 300 DPI
+      // 200 DPI render: 1mm = ~7.87px → A4 = 1654×2340px
+      const pxmm = 200 / 25.4;
+      const jpegPages = [];
       for (let s = 0; s < sheetCount; s++) {
-        if (s > 0) doc.addPage();
-        const oc = Object.assign(document.createElement("canvas"), {
-          width: Math.round(A4.w * pxmm),
-          height: Math.round(A4.h * pxmm),
-        });
+        const oc = document.createElement("canvas");
+        oc.width  = Math.round(A4.w * pxmm);
+        oc.height = Math.round(A4.h * pxmm);
         const sl = computeLayout(phone.dims, perSheet, bleed);
         const sp = Array.from({ length: perSheet }, (_, i) => photos[`${s}-${i}`] || null);
         renderA4(oc, phone, sl, sp, { showBleed: false, bgColor });
-        doc.addImage(oc.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, A4.w, A4.h);
+        jpegPages.push({ bytes: canvasToJpegBytes(oc, 0.93), w: oc.width, h: oc.height });
       }
-      doc.save(`PrintMyCase-${phone.model.replace(/\s+/g, "-")}.pdf`);
+      const blob = buildPDF(jpegPages);
+      downloadBlob(blob, `PrintMyCase-${phone.model.replace(/\s+/g, "-")}.pdf`);
       setPdfDone(true);
       setTimeout(() => setPdfDone(false), 3000);
     } catch (e) {
-      alert("PDF generation failed. Use 'Print Directly' as fallback.");
+      console.error("PDF error:", e);
+      alert("PDF generation failed:\n" + e.message);
     }
     setPdfLoading(false);
+  };
+
+  // ── Render sheets and open in a new print-ready tab ───────────────
+  const handlePrint = () => {
+    if (!phone) return;
+    const imgSrcs = [];
+    for (let s = 0; s < sheetCount; s++) {
+      const oc = document.createElement("canvas");
+      // 150 DPI for print tab — crisp enough, renders fast
+      const pxmm = 150 / 25.4;
+      oc.width  = Math.round(A4.w * pxmm);
+      oc.height = Math.round(A4.h * pxmm);
+      const sl = computeLayout(phone.dims, perSheet, bleed);
+      const sp = Array.from({ length: perSheet }, (_, i) => photos[`${s}-${i}`] || null);
+      renderA4(oc, phone, sl, sp, { showBleed: true, bgColor });
+      imgSrcs.push(oc.toDataURL("image/jpeg", 0.95));
+    }
+    openPrintWindow(imgSrcs);
   };
 
   /* ─── Design tokens ─────────────────────────────────────────── */
@@ -1032,6 +1435,28 @@ export default function PrintMyCase() {
                         style={{ width: 26, height: 26, borderRadius: 7, border: "none", padding: 0, cursor: "pointer", background: "none" }} title="Custom colour" />
                     </div>
                   </div>
+
+                  {/* Cut-guide legend */}
+                  {phone?.dims?.cam && (
+                    <div style={{ marginTop: 12, borderRadius: 9, padding: "9px 11px", background: C.subtle, fontSize: 11, lineHeight: 2 }}>
+                      <div style={{ fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: C.muted, marginBottom: 3 }}>Cut Guide Legend</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ width: 13, height: 13, borderRadius: 3, border: "2px dashed rgba(220,38,38,0.9)", background: "rgba(239,68,68,0.1)", flexShrink: 0 }} />
+                        <span style={{ color: C.sub }}>Red = Camera module cutout</span>
+                      </div>
+                      {phone?.dims?.fp?.type === "rear" && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ width: 13, height: 13, borderRadius: "50%", border: "2px dashed rgba(5,150,105,0.9)", background: "rgba(16,185,129,0.1)", flexShrink: 0 }} />
+                          <span style={{ color: C.sub }}>Green = Fingerprint cutout</span>
+                        </div>
+                      )}
+                      <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>
+                        {phone?.dims?.fp?.type === "udp" && "ℹ️ Under-display FP — no back cutout"}
+                        {phone?.dims?.fp?.type === "side" && "ℹ️ Side FP button — no back cutout"}
+                        {phone?.dims?.fp?.type === "none" && "ℹ️ Face ID — no fingerprint cutout"}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Phone info */}
@@ -1066,7 +1491,7 @@ export default function PrintMyCase() {
                     {pdfDone ? "✓ PDF Downloaded!" : pdfLoading ? "⏳ Generating 300 DPI PDF..." : "⬇️ Download PDF"}
                   </button>
                   <p style={{ textAlign: "center", fontSize: 10, color: C.muted, margin: "0 0 10px" }}>A4 · 300 DPI · {sheetCount} page{sheetCount > 1 ? "s" : ""} · JPEG compression 95%</p>
-                  <button onClick={() => window.print()} style={{ ...BTN_GHOST, width: "100%", textAlign: "center", display: "block" }}>🖨️ Print Directly</button>
+                  <button onClick={handlePrint} style={{ ...BTN_GHOST, width: "100%", textAlign: "center", display: "block" }}>🖨️ Print Directly</button>
                 </div>
 
                 <button onClick={() => setStep(3)} style={{ ...BTN_GHOST, textAlign: "center" }}>← Back to Photos</button>
