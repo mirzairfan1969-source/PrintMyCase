@@ -296,7 +296,9 @@ const PHONES = {
 };
 
 const BRANDS = Object.keys(PHONES);
-const A4 = { w: 210, h: 297 }; // mm
+const A4 = { w: 210, h: 297 };
+// Use landscape for 3-4 photos — phones fit without heavy scaling
+const getA4 = (n) => n >= 3 ? { w: 297, h: 210 } : { w: 210, h: 297 }; // mm
 
 const BRAND_ACCENT = {
   Apple: "#111",        Samsung: "#1428A0",  OnePlus: "#F50514",
@@ -307,17 +309,30 @@ const BRAND_ACCENT = {
 
 /* ═══════════════════════════════════════════════════════════════════
    SMART LAYOUT ENGINE
-   Automatically positions 1-4 phone slots on A4, scaling down if needed
+   1-2 photos → portrait A4 (210×297 mm)
+   3-4 photos → landscape A4 (297×210 mm), single row — no heavy scaling
 ═══════════════════════════════════════════════════════════════════ */
-function computeLayout(dims, count, bleed = 3, margin = 8, gap = 5) {
+function computeLayout(dims, count, bleed = 3, margin = 8, gap = 5, a4 = null) {
+  if (!a4) a4 = getA4(count);
   const sw = dims.w + bleed * 2;
   const sh = dims.h + bleed * 2;
-  const aw = A4.w - margin * 2;
-  const ah = A4.h - margin * 2;
+  const aw = a4.w - margin * 2;
+  const ah = a4.h - margin * 2;
   const mk = (x, y, s = 1) => ({
     x, y, w: sw * s, h: sh * s, bleed: bleed * s, pw: dims.w * s, ph: dims.h * s,
   });
 
+  // ── Landscape: place all slots in a single horizontal row ─────────
+  if (a4.w > a4.h) {
+    const s = Math.min(1, aw / (sw * count + gap * (count - 1)), ah / sh);
+    const sw_ = sw * s, sh_ = sh * s, g_ = gap * s;
+    const totalW = sw_ * count + g_ * (count - 1);
+    const ox = margin + (aw - totalW) / 2;
+    const oy = margin + (ah - sh_) / 2;
+    return Array.from({ length: count }, (_, i) => mk(ox + i * (sw_ + g_), oy, s));
+  }
+
+  // ── Portrait layouts ───────────────────────────────────────────────
   if (count === 1)
     return [mk(margin + (aw - sw) / 2, margin + (ah - sh) / 2)];
 
@@ -329,25 +344,6 @@ function computeLayout(dims, count, bleed = 3, margin = 8, gap = 5) {
     const ox = margin + (aw - sw) / 2, oy = margin + (ah - (sh * 2 + gap)) / 2;
     return [mk(ox, oy), mk(ox, oy + sh + gap)];
   }
-
-  if (count === 3) {
-    if (sw * 2 + gap <= aw && sh * 2 + gap <= ah) {
-      const ox = margin + (aw - (sw * 2 + gap)) / 2, oy = margin + (ah - (sh * 2 + gap)) / 2;
-      return [mk(ox, oy), mk(ox + sw + gap, oy), mk(margin + (aw - sw) / 2, oy + sh + gap)];
-    }
-    const s3 = Math.min(1, aw / (sw * 3 + gap * 2), ah / sh);
-    const [sw3, sh3, g3] = [sw * s3, sh * s3, gap * s3];
-    const ox = margin + (aw - (sw3 * 3 + g3 * 2)) / 2, cy = margin + (ah - sh3) / 2;
-    return [0, 1, 2].map(i => mk(ox + i * (sw3 + g3), cy, s3));
-  }
-
-  if (count === 4) {
-    const s4 = Math.min(1, aw / (sw * 2 + gap), ah / (sh * 2 + gap));
-    const [sw4, sh4, g4] = [sw * s4, sh * s4, gap * s4];
-    const ox = margin + (aw - (sw4 * 2 + g4)) / 2, oy = margin + (ah - (sh4 * 2 + g4)) / 2;
-    return [[ox, oy], [ox + sw4 + g4, oy], [ox, oy + sh4 + g4], [ox + sw4 + g4, oy + sh4 + g4]]
-      .map(([x, y]) => mk(x, y, s4));
-  }
   return [];
 }
 
@@ -358,7 +354,8 @@ function computeLayout(dims, count, bleed = 3, margin = 8, gap = 5) {
 function renderA4(canvas, phone, layout, photos = [], opts = {}) {
   if (!canvas || !phone) return;
   const ctx = canvas.getContext("2d");
-  const sc = canvas.height / A4.h;
+  const a4   = opts.a4 || { w: 210, h: 297 };
+  const sc   = canvas.height / a4.h;          // px per mm
   const { showBleed = true, bgColor = "#f8f8f8" } = opts;
 
   ctx.fillStyle = "#ffffff";
@@ -471,20 +468,13 @@ function renderA4(canvas, phone, layout, photos = [], opts = {}) {
       const fs = Math.max(4, 4.5 * sc);
 
       ctx.save();
-      // Tinted fill
       ctx.fillStyle = "rgba(239,68,68,0.09)";
       rrPath(px, py, pw, ph, pr); ctx.fill();
-      // Dashed border
       ctx.strokeStyle = "rgba(220,38,38,0.92)";
       ctx.setLineDash([lw * 2.5, lw * 2]);
       ctx.lineWidth = lw;
       rrPath(px, py, pw, ph, pr); ctx.stroke();
       ctx.setLineDash([]);
-      // Label above the module
-      ctx.fillStyle = "rgba(220,38,38,1)";
-      ctx.font = `700 ${fs}px system-ui,sans-serif`;
-      ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-      ctx.fillText("✂ CAMERA CUT", px + pw / 2, py - lw);
       ctx.restore();
     }
 
@@ -504,10 +494,6 @@ function renderA4(canvas, phone, layout, photos = [], opts = {}) {
       ctx.lineWidth = lw;
       ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = "rgba(5,150,105,1)";
-      ctx.font = `700 ${fs}px system-ui,sans-serif`;
-      ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-      ctx.fillText("✂ FP CUT", px, py - pr - lw);
       ctx.restore();
     }
 
@@ -526,9 +512,9 @@ function renderA4(canvas, phone, layout, photos = [], opts = {}) {
   ctx.fillStyle = "#c4c4c4";
   ctx.font = `${Math.max(4, 4 * sc)}px 'Outfit',system-ui,sans-serif`;
   ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-  ctx.fillText("Print at 100% scale — do NOT scale or fit to page", sc * 5, (A4.h - 3) * sc);
+  ctx.fillText("Print at 100% scale — do NOT scale or fit to page", sc * 5, (a4.h - 3) * sc);
   ctx.textAlign = "right";
-  ctx.fillText("PrintMyCase", (A4.w - 5) * sc, (A4.h - 3) * sc);
+  ctx.fillText("PrintMyCase", (a4.w - 5) * sc, (a4.h - 3) * sc);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -551,104 +537,79 @@ function canvasToJpegBytes(canvas, quality = 0.92) {
 /**
  * Builds a PDF Blob from an array of JPEG pages.
  * Each page is { bytes: Uint8Array, w: number, h: number } (pixel dimensions).
- * The PDF page size is always A4 (595.28 × 841.89 pt).
- *
- * Object layout:
- *   1 → Catalog
- *   2 → Pages
- *   3+i*3 → Page i
- *   4+i*3 → Content stream i
- *   5+i*3 → Image XObject i
+ * Pass isLandscape=true for 3-4 slot sheets (A4 landscape = 841.89×595.28 pt).
  */
-function buildPDF(jpegPages) {
+function buildPDF(jpegPages, isLandscape = false) {
   const enc = new TextEncoder();
-  const chunks = [];   // Uint8Array[]
+  const chunks = [];
   let pos = 0;
 
-  // Helpers ─────────────────────────────────────────────────────────
   const writeStr = (s) => { const b = enc.encode(s); chunks.push(b); pos += b.length; };
   const writeBin = (b) => { chunks.push(b);           pos += b.length; };
   const curPos   = ()  => pos;
 
-  const n = jpegPages.length;
-  const PW = 595.28, PH = 841.89;                  // A4 in PDF points
+  const n  = jpegPages.length;
+  // Portrait: 595.28×841.89 pt  |  Landscape: 841.89×595.28 pt
+  const PW = isLandscape ? 841.89 : 595.28;
+  const PH = isLandscape ? 595.28 : 841.89;
   const totalObjs = 2 + n * 3;
   const offsets   = new Array(totalObjs + 2).fill(0);
 
-  // Header ──────────────────────────────────────────────────────────
   writeStr("%PDF-1.4\n");
 
-  // Object 1 — Catalog ──────────────────────────────────────────────
   offsets[1] = curPos();
   writeStr("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
 
-  // Object 2 — Pages tree ───────────────────────────────────────────
   offsets[2] = curPos();
   const kidsRef = Array.from({ length: n }, (_, i) => `${3 + i * 3} 0 R`).join(" ");
   writeStr(`2 0 obj\n<< /Type /Pages /Kids [${kidsRef}] /Count ${n} >>\nendobj\n`);
 
-  // One set of 3 objects per page ───────────────────────────────────
   for (let i = 0; i < n; i++) {
     const { bytes: imgBytes, w: imgW, h: imgH } = jpegPages[i];
-    const pN = 3 + i * 3;   // Page dict
-    const cN = 4 + i * 3;   // Content stream
-    const mN = 5 + i * 3;   // Image XObject
+    const pN = 3 + i * 3;
+    const cN = 4 + i * 3;
+    const mN = 5 + i * 3;
 
-    // Content stream: place image with Y-flip so JPEG top-left → PDF top-left
-    // Matrix: [PW  0  0  -PH  0  PH]  scales & flips the unit square to full A4
-    const contStr  = enc.encode(`q ${PW.toFixed(2)} 0 0 ${(-PH).toFixed(2)} 0 ${PH.toFixed(2)} cm /Im${i + 1} Do Q\n`);
+    // Place image to fill the full page — no Y-flip needed; PDF readers
+    // handle JPEG top-to-bottom row order correctly with this matrix.
+    const contStr = enc.encode(`q ${PW.toFixed(2)} 0 0 ${PH.toFixed(2)} 0 0 cm /Im${i + 1} Do Q\n`);
 
-    // Page dict
     offsets[pN] = curPos();
     writeStr(
-      `${pN} 0 obj\n` +
-      `<< /Type /Page /Parent 2 0 R\n` +
+      `${pN} 0 obj\n<< /Type /Page /Parent 2 0 R\n` +
       `   /MediaBox [0 0 ${PW.toFixed(2)} ${PH.toFixed(2)}]\n` +
       `   /Contents ${cN} 0 R\n` +
-      `   /Resources << /XObject << /Im${i + 1} ${mN} 0 R >> >> >>\n` +
-      `endobj\n`
+      `   /Resources << /XObject << /Im${i + 1} ${mN} 0 R >> >> >>\nendobj\n`
     );
 
-    // Content stream object
     offsets[cN] = curPos();
     writeStr(`${cN} 0 obj\n<< /Length ${contStr.length} >>\nstream\n`);
     writeBin(contStr);
     writeStr("endstream\nendobj\n");
 
-    // Image XObject (JPEG, DCT-encoded)
     offsets[mN] = curPos();
     writeStr(
-      `${mN} 0 obj\n` +
-      `<< /Type /XObject /Subtype /Image\n` +
+      `${mN} 0 obj\n<< /Type /XObject /Subtype /Image\n` +
       `   /Width ${imgW} /Height ${imgH}\n` +
       `   /ColorSpace /DeviceRGB /BitsPerComponent 8\n` +
-      `   /Filter /DCTDecode /Length ${imgBytes.length} >>\n` +
-      `stream\n`
+      `   /Filter /DCTDecode /Length ${imgBytes.length} >>\nstream\n`
     );
     writeBin(imgBytes);
     writeStr("\nendstream\nendobj\n");
   }
 
-  // Cross-reference table ───────────────────────────────────────────
   const xrefPos = curPos();
   writeStr(`xref\n0 ${totalObjs + 1}\n`);
   writeStr("0000000000 65535 f \n");
   for (let i = 1; i <= totalObjs; i++) {
     writeStr(`${String(offsets[i]).padStart(10, "0")} 00000 n \n`);
   }
+  writeStr(`trailer\n<< /Size ${totalObjs + 1} /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`);
 
-  // Trailer ─────────────────────────────────────────────────────────
-  writeStr(
-    `trailer\n<< /Size ${totalObjs + 1} /Root 1 0 R >>\n` +
-    `startxref\n${xrefPos}\n%%EOF\n`
-  );
-
-  // Assemble final Uint8Array ───────────────────────────────────────
-  const total = chunks.reduce((s, c) => s + c.length, 0);
+  const total  = chunks.reduce((s, c) => s + c.length, 0);
   const result = new Uint8Array(total);
   let off = 0;
   for (const c of chunks) { result.set(c, off); off += c.length; }
-
   return new Blob([result], { type: "application/pdf" });
 }
 
@@ -669,11 +630,13 @@ function downloadBlob(blob, filename) {
  * Shows instructions + "Print Now" button; @page CSS ensures exact A4.
  * Completely avoids the sandboxed-iframe printing restriction.
  */
-function openPrintWindow(imageSrcs) {
+function openPrintWindow(imageSrcs, landscape = false) {
+  const orient = landscape ? "A4 landscape" : "A4 portrait";
+  const pw = landscape ? "297mm" : "210mm";
+  const ph = landscape ? "210mm" : "297mm";
   const pages = imageSrcs
     .map(src => `<div class="pg"><img src="${src}" alt="print sheet"></div>`)
     .join("\n");
-
   const html = `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8">
@@ -689,14 +652,14 @@ function openPrintWindow(imageSrcs) {
               border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
   .warn{background:#fffbe6;border-bottom:1px solid #e6d800;
         padding:8px 20px;font-size:11px;color:#7a6600}
-  .pg{width:210mm;height:297mm;margin:16px auto;background:#fff;
+  .pg{width:${pw};height:${ph};margin:16px auto;background:#fff;
       box-shadow:0 4px 24px rgba(0,0,0,.18);overflow:hidden}
-  .pg img{width:210mm;height:297mm;display:block}
-  @page{size:A4 portrait;margin:0}
+  .pg img{width:${pw};height:${ph};display:block}
+  @page{size:${orient};margin:0}
   @media print{
     .bar,.warn{display:none}
     body{background:#fff}
-    .pg{width:210mm;height:297mm;margin:0;box-shadow:none;page-break-after:always}
+    .pg{width:${pw};height:${ph};margin:0;box-shadow:none;page-break-after:always}
     .pg:last-child{page-break-after:avoid}
   }
 </style>
@@ -705,21 +668,17 @@ function openPrintWindow(imageSrcs) {
   <span style="font-size:26px">🖨️</span>
   <div>
     <h1>PrintMyCase — Ready to Print</h1>
-    <p>Paper: <b>A4</b> &nbsp;·&nbsp; Scale: <b>100% / Actual Size</b> &nbsp;·&nbsp; Margins: <b>None / 0 mm</b></p>
+    <p>Paper: <b>A4 ${landscape ? "Landscape" : "Portrait"}</b> &nbsp;·&nbsp; Scale: <b>100% / Actual Size</b> &nbsp;·&nbsp; Margins: <b>None / 0 mm</b></p>
   </div>
   <button onclick="window.print()">Print Now</button>
 </div>
-<div class="warn">⚠️ In the browser print dialog set Scale = <strong>100%</strong> and
-Margins = <strong>None</strong> — do NOT use "Fit to page"</div>
+<div class="warn">⚠️ In the print dialog: Scale = <strong>100%</strong>, Margins = <strong>None</strong>, Orientation = <strong>${landscape ? "Landscape" : "Portrait"}</strong></div>
 ${pages}
 </body></html>`;
-
   const blob = new Blob([html], { type: "text/html" });
   const url  = URL.createObjectURL(blob);
   const tab  = window.open(url, "_blank");
-  if (!tab) {
-    alert("Popup blocked!\nPlease allow popups for this site, then click 'Print Directly' again.");
-  }
+  if (!tab) alert("Popup blocked!\nPlease allow popups, then click 'Print Directly' again.");
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
@@ -885,6 +844,8 @@ export default function PrintMyCase() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfDone, setPdfDone]     = useState(false);
   const [narrow, setNarrow]       = useState(false);
+  // Per-sheet phone overrides — { [sheetIdx]: { brand, model } }
+  const [sheetOverrides, setSheetOverrides] = useState({});
 
   const canvasRef  = useRef(null);
   const fileRef    = useRef(null);
@@ -898,15 +859,34 @@ export default function PrintMyCase() {
 
   const phone  = brand && model ? { brand, model, dims: PHONES[brand]?.[model] } : null;
   const models = brand ? Object.keys(PHONES[brand] || {}) : [];
-  const layout = useMemo(() => phone ? computeLayout(phone.dims, perSheet, bleed) : [], [phone, perSheet, bleed]);
+
+  // Returns the phone for a given sheet (override or default)
+  const getSheetPhone = useCallback((sheetIdx) => {
+    const ov = sheetOverrides[sheetIdx];
+    if (ov?.model && PHONES[ov.brand]?.[ov.model]) {
+      return { brand: ov.brand, model: ov.model, dims: PHONES[ov.brand][ov.model] };
+    }
+    return phone;
+  }, [sheetOverrides, phone]);
+
+  const isLandscape = perSheet >= 3;
+  const a4now       = getA4(perSheet);
+  const activePhone = getSheetPhone(activeSheet);
+  const layout = useMemo(
+    () => activePhone ? computeLayout(activePhone.dims, perSheet, bleed, 8, 5, a4now) : [],
+    [activePhone, perSheet, bleed, isLandscape]
+  );
   const totalPhones = useMemo(() => BRANDS.reduce((a, b) => a + Object.keys(PHONES[b]).length, 0), []);
 
-  // Redraw canvas whenever relevant state changes
+  // Resize canvas + redraw whenever orientation or content changes
   useEffect(() => {
-    if (!canvasRef.current || !phone || step !== 4) return;
+    const cv = canvasRef.current;
+    if (!cv || !activePhone || step !== 4) return;
+    cv.width  = isLandscape ? 1123 : 794;
+    cv.height = isLandscape ? 794  : 1123;
     const sp = Array.from({ length: perSheet }, (_, i) => photos[`${activeSheet}-${i}`] || null);
-    renderA4(canvasRef.current, phone, layout, sp, { showBleed, bgColor });
-  }, [phone, layout, photos, activeSheet, showBleed, bgColor, step, perSheet]);
+    renderA4(cv, activePhone, layout, sp, { showBleed, bgColor, a4: a4now });
+  }, [activePhone, layout, photos, activeSheet, showBleed, bgColor, step, perSheet, isLandscape]);
 
   const handleFile = useCallback((file, key) => {
     if (!file || !file.type.startsWith("image/")) return;
@@ -922,25 +902,27 @@ export default function PrintMyCase() {
     reader.readAsDataURL(file);
   }, []);
 
-  // ── Renders all sheets to JPEG pages, builds PDF blob, downloads ──
   const generatePDF = async () => {
-    if (!phone) return;
+    if (!phone && Object.keys(sheetOverrides).length === 0) return;
     setPdfLoading(true);
     try {
-      // 200 DPI render: 1mm = ~7.87px → A4 = 1654×2340px
       const pxmm = 200 / 25.4;
+      const a4   = getA4(perSheet);
+      const landscape = perSheet >= 3;
       const jpegPages = [];
       for (let s = 0; s < sheetCount; s++) {
+        const sp = getSheetPhone(s);
+        if (!sp) continue;
         const oc = document.createElement("canvas");
-        oc.width  = Math.round(A4.w * pxmm);
-        oc.height = Math.round(A4.h * pxmm);
-        const sl = computeLayout(phone.dims, perSheet, bleed);
-        const sp = Array.from({ length: perSheet }, (_, i) => photos[`${s}-${i}`] || null);
-        renderA4(oc, phone, sl, sp, { showBleed: false, bgColor });
+        oc.width  = Math.round(a4.w * pxmm);
+        oc.height = Math.round(a4.h * pxmm);
+        const sl = computeLayout(sp.dims, perSheet, bleed, 8, 5, a4);
+        const ph = Array.from({ length: perSheet }, (_, i) => photos[`${s}-${i}`] || null);
+        renderA4(oc, sp, sl, ph, { showBleed: false, bgColor, a4 });
         jpegPages.push({ bytes: canvasToJpegBytes(oc, 0.93), w: oc.width, h: oc.height });
       }
-      const blob = buildPDF(jpegPages);
-      downloadBlob(blob, `PrintMyCase-${phone.model.replace(/\s+/g, "-")}.pdf`);
+      const blob = buildPDF(jpegPages, landscape);
+      downloadBlob(blob, `PrintMyCase-${(activePhone?.model || "sheet").replace(/\s+/g, "-")}.pdf`);
       setPdfDone(true);
       setTimeout(() => setPdfDone(false), 3000);
     } catch (e) {
@@ -950,22 +932,24 @@ export default function PrintMyCase() {
     setPdfLoading(false);
   };
 
-  // ── Render sheets and open in a new print-ready tab ───────────────
   const handlePrint = () => {
-    if (!phone) return;
+    if (!phone && Object.keys(sheetOverrides).length === 0) return;
+    const pxmm = 150 / 25.4;
+    const a4   = getA4(perSheet);
+    const landscape = perSheet >= 3;
     const imgSrcs = [];
     for (let s = 0; s < sheetCount; s++) {
+      const sp = getSheetPhone(s);
+      if (!sp) continue;
       const oc = document.createElement("canvas");
-      // 150 DPI for print tab — crisp enough, renders fast
-      const pxmm = 150 / 25.4;
-      oc.width  = Math.round(A4.w * pxmm);
-      oc.height = Math.round(A4.h * pxmm);
-      const sl = computeLayout(phone.dims, perSheet, bleed);
-      const sp = Array.from({ length: perSheet }, (_, i) => photos[`${s}-${i}`] || null);
-      renderA4(oc, phone, sl, sp, { showBleed: true, bgColor });
+      oc.width  = Math.round(a4.w * pxmm);
+      oc.height = Math.round(a4.h * pxmm);
+      const sl = computeLayout(sp.dims, perSheet, bleed, 8, 5, a4);
+      const ph = Array.from({ length: perSheet }, (_, i) => photos[`${s}-${i}`] || null);
+      renderA4(oc, sp, sl, ph, { showBleed: true, bgColor, a4 });
       imgSrcs.push(oc.toDataURL("image/jpeg", 0.95));
     }
-    openPrintWindow(imgSrcs);
+    openPrintWindow(imgSrcs, landscape);
   };
 
   /* ─── Design tokens ─────────────────────────────────────────── */
@@ -1208,9 +1192,11 @@ export default function PrintMyCase() {
                 <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.muted, marginBottom: 9 }}>Photos Per Sheet</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {[1, 2, 3, 4].map(n => {
+                    const a4thumb = getA4(n);
                     const sl = phone
-                      ? computeLayout(phone.dims, n, bleed)
-                      : Array.from({ length: n }, (_, i) => ({ x: 10 + (i % 2) * 100, y: 30 + Math.floor(i / 2) * 140, w: 90, h: 130, bleed: 3, pw: 84, ph: 124 }));
+                      ? computeLayout(phone.dims, n, bleed, 8, 5, a4thumb)
+                      : Array.from({ length: n }, (_, i) => ({ x: 10 + i * (a4thumb.w / n - 5), y: 15, w: a4thumb.w / n - 15, h: a4thumb.h * 0.7, bleed: 3, pw: 70, ph: 140 }));
+                    const ar = a4thumb.w / a4thumb.h;
                     return (
                       <button key={n} onClick={() => setPerSheet(n)} style={{
                         padding: 12, borderRadius: 14, cursor: "pointer", textAlign: "left",
@@ -1218,9 +1204,26 @@ export default function PrintMyCase() {
                         background: perSheet === n ? (dark ? "rgba(99,102,241,0.11)" : "rgba(99,102,241,0.04)") : C.subtle,
                         transition: "all 0.15s",
                       }}>
-                        <MiniA4Preview layout={sl} active={perSheet === n} dark={dark} />
+                        <div style={{ width: "100%", aspectRatio: String(ar), position: "relative", background: dark ? "#1e1e2e" : "#f0f0ee", borderRadius: 4, overflow: "hidden" }}>
+                          {sl.map((slot, i) => {
+                            const pct = (v, total) => `${(v / a4thumb.w) * 100}%`;
+                            const pctH = (v) => `${(v / a4thumb.h) * 100}%`;
+                            return (
+                              <div key={i} style={{
+                                position: "absolute",
+                                left: `${(slot.x / a4thumb.w) * 100}%`, top: `${(slot.y / a4thumb.h) * 100}%`,
+                                width: `${(slot.w / a4thumb.w) * 100}%`, height: `${(slot.h / a4thumb.h) * 100}%`,
+                                border: `1.5px dashed ${perSheet === n ? "#6366f1" : "#a5b4fc"}`,
+                                background: perSheet === n ? "rgba(99,102,241,0.18)" : "rgba(165,180,252,0.1)",
+                                borderRadius: 1,
+                              }} />
+                            );
+                          })}
+                        </div>
                         <div style={{ fontFamily: headingFont, fontWeight: 700, fontSize: 13, marginTop: 7, color: perSheet === n ? ACCENT : C.text }}>{n} Photo{n > 1 ? "s" : ""}</div>
-                        <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{["", "Centered, full bleed", "Side by side / stacked", "2+1 centred", "2×2 grid"][n]}</div>
+                        <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>
+                          {["", "Centred, full", "Side by side", "3-up landscape", "4-up landscape"][n]}
+                        </div>
                       </button>
                     );
                   })}
@@ -1286,6 +1289,55 @@ export default function PrintMyCase() {
                 <span style={{ fontSize: 11, padding: "4px 11px", borderRadius: 20, fontWeight: 600, background: photoCount === perSheet ? (dark ? "rgba(34,197,94,0.12)" : "rgba(34,197,94,0.1)") : C.subtle, color: photoCount === perSheet ? "#22c55e" : C.muted }}>
                   {photoCount}/{perSheet} uploaded
                 </span>
+              </div>
+
+              {/* Per-sheet phone override ─────────────────────── */}
+              <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 12, background: C.subtle, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.09em", color: C.muted, marginBottom: 7 }}>
+                  Phone for Sheet {activeSheet + 1}
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <select
+                    value={sheetOverrides[activeSheet]?.brand || brand}
+                    onChange={e => {
+                      const b = e.target.value;
+                      setSheetOverrides(prev => ({ ...prev, [activeSheet]: { brand: b, model: "" } }));
+                    }}
+                    style={{ ...INPUT, flex: "1 1 120px", padding: "7px 10px", fontSize: 12 }}
+                  >
+                    {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                  <select
+                    value={sheetOverrides[activeSheet]?.model || model}
+                    onChange={e => {
+                      const m = e.target.value;
+                      const b = sheetOverrides[activeSheet]?.brand || brand;
+                      setSheetOverrides(prev => ({ ...prev, [activeSheet]: { brand: b, model: m } }));
+                    }}
+                    style={{ ...INPUT, flex: "2 1 160px", padding: "7px 10px", fontSize: 12 }}
+                  >
+                    <option value="">Select model…</option>
+                    {Object.keys(PHONES[sheetOverrides[activeSheet]?.brand || brand] || {}).map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  {sheetOverrides[activeSheet]?.model && (
+                    <button
+                      onClick={() => setSheetOverrides(prev => { const n = { ...prev }; delete n[activeSheet]; return n; })}
+                      style={{ padding: "7px 12px", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, cursor: "pointer", fontSize: 11, fontFamily, whiteSpace: "nowrap" }}
+                    >
+                      ↺ Use default
+                    </button>
+                  )}
+                </div>
+                {getSheetPhone(activeSheet) && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: C.sub }}>
+                    📱 <b>{getSheetPhone(activeSheet).brand} {getSheetPhone(activeSheet).model}</b>
+                    <span style={{ color: C.muted, marginLeft: 6, fontFamily: "monospace" }}>
+                      {getSheetPhone(activeSheet).dims.w}×{getSheetPhone(activeSheet).dims.h}mm
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Upload slots grid */}
