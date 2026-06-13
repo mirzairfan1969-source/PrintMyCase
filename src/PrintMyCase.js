@@ -187,6 +187,7 @@ const PHONES = {
     "OPPO A38":            { w:75.6,h:163.7,t:7.99, cam:{x:8.0,y:9.0,w:14,h:28,r:5},  fp:{type:"side",y:67} },
     "OPPO A17":            { w:74.1,h:163.8,t:8.3,  cam:{x:8.0,y:9.0,w:13,h:26,r:5},  fp:{type:"rear",x:37.0,y:112,r:4} },
     "OPPO A16":            { w:75.6,h:163.7,t:8.4,  cam:{x:8.5,y:9.5,w:12,h:24,r:4},  fp:{type:"rear",x:37.8,y:112,r:4} },
+    "OPPO A31":            { w:75.5,h:163.9,t:8.3,  cam:{x:8.0,y:9.0,w:14,h:32,r:5},  fp:{type:"rear",x:37.7,y:112,r:4.5} },
   },
   Realme: {
     "Realme GT 7 Pro":       { w:74.5,h:162.5,t:8.5,  cam:{x:4.5,y:5.0,w:40,h:40,r:13}, fp:{type:"udp"} },
