@@ -170,7 +170,7 @@ const PHONES = {
     "OPPO Reno 11 Pro":    { w:74.2,h:161.5,t:8.02, cam:{x:6.5,y:7.5,w:22,h:40,r:8},  fp:{type:"udp"} },
     "OPPO Reno 11":        { w:74.2,h:161.5,t:7.93, cam:{x:7.0,y:8.0,w:18,h:36,r:7},  fp:{type:"udp"} },
     "OPPO Reno 11F":       { w:74.2,h:162.0,t:7.6,  cam:{x:7.5,y:8.5,w:16,h:30,r:6},  fp:{type:"side",y:66} },
-    "OPPO Reno 10 Pro+":   { w:74.2,h:161.5,t:8.96, cam:{x:6.0,y:7.0,w:24,h:42,r:9},  
+    "OPPO Reno 10 Pro+":   { w:74.2,h:161.5,t:8.96, cam:{x:6.0,y:7.0,w:24,h:42,r:9},  fp:{type:"udp"} },
     "OPPO Reno 10 Pro":    { w:74.2,h:161.5,t:8.2,  cam:{x:6.5,y:7.5,w:22,h:40,r:8},  fp:{type:"udp"} },
     "OPPO Reno 10":        { w:74.2,h:161.5,t:7.9,  cam:{x:7.0,y:8.0,w:18,h:36,r:7},  fp:{type:"udp"} },
     "OPPO Reno 8 Pro":     { w:74.2,h:161.5,t:7.99, cam:{x:7.0,y:7.5,w:20,h:38,r:8},  fp:{type:"udp"} },
