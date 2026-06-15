@@ -187,9 +187,8 @@ const PHONES = {
     "OPPO A38":            { w:75.6,h:163.7,t:7.99, cam:{x:8.0,y:9.0,w:14,h:28,r:5},  fp:{type:"side",y:67} },
     "OPPO A17":            { w:74.1,h:163.8,t:8.3,  cam:{x:8.0,y:9.0,w:13,h:26,r:5},  fp:{type:"rear",x:37.0,y:112,r:4} },
     "OPPO A16":            { w:75.6,h:163.7,t:8.4,  cam:{x:8.5,y:9.5,w:12,h:24,r:4},  fp:{type:"rear",x:37.8,y:112,r:4} },
-    "OPPO A31":            { w:75.5,h:163.9,t:8.3,  cam:{x:8.0,y:9.0,w:14,h:32,r:5},  fp:{type:"none"} }
-   },
-     Realme: {
+  },
+  Realme: {
     "Realme GT 7 Pro":       { w:74.5,h:162.5,t:8.5,  cam:{x:4.5,y:5.0,w:40,h:40,r:13}, fp:{type:"udp"} },
     "Realme GT 7":           { w:74.6,h:162.0,t:7.9,  cam:{x:5.5,y:6.5,w:30,h:38,r:11}, fp:{type:"udp"} },
     "Realme GT 6T":          { w:74.2,h:162.0,t:8.0,  cam:{x:5.5,y:6.5,w:28,h:38,r:10}, fp:{type:"udp"} },
@@ -437,74 +436,67 @@ function renderA4(canvas, phone, layout, photos = [], opts = {}) {
       });
 
     // ── Camera & fingerprint cutout guides ────────────────────
-    // pxMm: canvas pixels per 1 mm of original phone dimension
-    // (accounts for any slot scaling in 3/4-photo layouts)
-    const pxMm = iw / phone.dims.w;
+    // Per-slot phone: use override if provided, else fall back to sheet phone
+    const slotPhone = opts.slotPhones?.[idx] || phone;
+    const sd = slotPhone?.dims || phone.dims;
 
-    // Helper — draw a manual rounded-rect path (no ctx.roundRect needed)
+    // Fit this phone inside the inner area and centre it
+    const fitScale = Math.min(iw / sd.w, ih / sd.h);
+    const siw = sd.w * fitScale, sih = sd.h * fitScale;
+    const six = ix + (iw - siw) / 2;
+    const siy = iy + (ih - sih) / 2;
+    const pxMm = fitScale; // canvas px per phone mm
+
+    // Helper — manual rounded-rect path (ctx.roundRect not universal)
     const rrPath = (rx, ry, rw, rh, rr) => {
       const r = Math.min(rr, rw / 2, rh / 2);
       ctx.beginPath();
-      ctx.moveTo(rx + r, ry);
-      ctx.lineTo(rx + rw - r, ry);
+      ctx.moveTo(rx + r, ry); ctx.lineTo(rx + rw - r, ry);
       ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + r);
       ctx.lineTo(rx + rw, ry + rh - r);
       ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - r, ry + rh);
-      ctx.lineTo(rx + r, ry + rh);
-      ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - r);
-      ctx.lineTo(rx, ry + r);
-      ctx.quadraticCurveTo(rx, ry, rx + r, ry);
+      ctx.lineTo(rx + r, ry + rh); ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - r);
+      ctx.lineTo(rx, ry + r); ctx.quadraticCurveTo(rx, ry, rx + r, ry);
       ctx.closePath();
     };
 
-    const dims = phone.dims;
-
-    // ── Camera module cutout (red dashed) ─────────────────────
-    if (dims.cam) {
-      const { x: cx, y: cy, w: cw, h: ch, r: cr = 4 } = dims.cam;
-      const px = ix + cx * pxMm, py = iy + cy * pxMm;
-      const pw = cw * pxMm,      ph = ch * pxMm;
-      const pr = cr * pxMm;
+    // ── Camera module (red dashed rounded rect) ───────────────
+    if (sd.cam) {
+      const { x: cx, y: cy, w: cw, h: ch, r: cr = 4 } = sd.cam;
+      const px = six + cx * pxMm, py = siy + cy * pxMm;
+      const pw = cw * pxMm, ph2 = ch * pxMm, pr = cr * pxMm;
       const lw = Math.max(0.5, sc * 0.7);
-      const fs = Math.max(4, 4.5 * sc);
-
       ctx.save();
       ctx.fillStyle = "rgba(239,68,68,0.09)";
-      rrPath(px, py, pw, ph, pr); ctx.fill();
+      rrPath(px, py, pw, ph2, pr); ctx.fill();
       ctx.strokeStyle = "rgba(220,38,38,0.92)";
-      ctx.setLineDash([lw * 2.5, lw * 2]);
-      ctx.lineWidth = lw;
-      rrPath(px, py, pw, ph, pr); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
+      ctx.setLineDash([lw * 2.5, lw * 2]); ctx.lineWidth = lw;
+      rrPath(px, py, pw, ph2, pr); ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
     }
 
-    // ── Rear fingerprint cutout (green dashed circle) ─────────
-    if (dims.fp?.type === "rear") {
-      const { x: fpx = dims.w / 2, y: fpy, r: fpr = 5 } = dims.fp;
-      const px = ix + fpx * pxMm, py = iy + fpy * pxMm;
-      const pr = fpr * pxMm;
+    // ── Rear fingerprint (green dashed circle) ────────────────
+    if (sd.fp?.type === "rear") {
+      const { x: fpx = sd.w / 2, y: fpy, r: fpr = 5 } = sd.fp;
+      const px = six + fpx * pxMm, py = siy + fpy * pxMm, pr = fpr * pxMm;
       const lw = Math.max(0.5, sc * 0.7);
-      const fs = Math.max(4, 4.5 * sc);
-
       ctx.save();
       ctx.fillStyle = "rgba(16,185,129,0.09)";
       ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = "rgba(5,150,105,0.92)";
-      ctx.setLineDash([lw * 2.5, lw * 2]);
-      ctx.lineWidth = lw;
+      ctx.setLineDash([lw * 2.5, lw * 2]); ctx.lineWidth = lw;
       ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
+      ctx.setLineDash([]); ctx.restore();
     }
 
     // ── Slot label ────────────────────────────────────────────
+    const fpNote = sd.fp?.type === "udp" ? " · under-display FP" :
+                   sd.fp?.type === "side" ? " · side FP" : "";
     ctx.fillStyle = "#9ca3af";
     ctx.font = `${Math.max(4.5, 5 * sc)}px 'Outfit',system-ui,sans-serif`;
     ctx.textAlign = "center"; ctx.textBaseline = "top";
-    const fpNote = dims.fp?.type === "udp" ? " · FP under-display" : dims.fp?.type === "side" ? " · side FP" : "";
     ctx.fillText(
-      `${phone.brand} ${phone.model}  ·  ${phone.dims.w}×${phone.dims.h}mm${fpNote}`,
+      `${slotPhone.brand} ${slotPhone.model}  ·  ${sd.w}×${sd.h}mm${fpNote}`,
       x + w / 2, y + h + sc * 2
     );
   });
@@ -533,6 +525,50 @@ function canvasToJpegBytes(canvas, quality = 0.92) {
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
+}
+
+/**
+ * Vertically flips a canvas then returns JPEG bytes.
+ * Used for PDF embedding: PDF y-axis is bottom-up, so a pre-flipped
+ * JPEG + no-flip matrix (q W 0 0 H 0 0) renders correctly in all viewers.
+ */
+function flippedJpegBytes(canvas, quality = 0.93) {
+  const fc = document.createElement("canvas");
+  fc.width  = canvas.width;
+  fc.height = canvas.height;
+  const fctx = fc.getContext("2d");
+  fctx.translate(0, canvas.height);
+  fctx.scale(1, -1);
+  fctx.drawImage(canvas, 0, 0);
+  return canvasToJpegBytes(fc, quality);
+}
+
+/**
+ * Loads an image file, normalises EXIF orientation by drawing to a canvas,
+ * and returns { img, dataURL } with baked-in correct orientation.
+ * This prevents photos appearing rotated/mirrored in the canvas.
+ */
+function normaliseImage(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const raw = new Image();
+      raw.onload = () => {
+        // Draw to a canvas — Chrome 81+ applies EXIF via drawImage;
+        // the resulting toDataURL is always top-left-origin JPEG.
+        const nc = document.createElement("canvas");
+        nc.width  = raw.naturalWidth;
+        nc.height = raw.naturalHeight;
+        nc.getContext("2d").drawImage(raw, 0, 0);
+        const dataURL = nc.toDataURL("image/jpeg", 0.95);
+        const img = new Image();
+        img.onload = () => resolve({ img, dataURL });
+        img.src = dataURL;
+      };
+      raw.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 /**
@@ -845,11 +881,11 @@ export default function PrintMyCase() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfDone, setPdfDone]     = useState(false);
   const [narrow, setNarrow]       = useState(false);
-  // Per-sheet phone overrides — { [sheetIdx]: { brand, model } }
-  const [sheetOverrides, setSheetOverrides] = useState({});
+  // Per-slot phone overrides — { 'sheetIdx-slotIdx': { brand, model } }
+  const [slotPhones, setSlotPhones] = useState({});
 
-  const canvasRef  = useRef(null);
-  const fileRef    = useRef(null);
+  const canvasRef   = useRef(null);
+  const fileRef     = useRef(null);
   const pendingSlot = useRef(null);
 
   useEffect(() => {
@@ -861,69 +897,75 @@ export default function PrintMyCase() {
   const phone  = brand && model ? { brand, model, dims: PHONES[brand]?.[model] } : null;
   const models = brand ? Object.keys(PHONES[brand] || {}) : [];
 
-  // Returns the phone for a given sheet (override or default)
-  const getSheetPhone = useCallback((sheetIdx) => {
-    const ov = sheetOverrides[sheetIdx];
+  // Returns the phone for a specific slot (override or default)
+  const getSlotPhone = useCallback((sheetIdx, slotIdx) => {
+    const key = `${sheetIdx}-${slotIdx}`;
+    const ov  = slotPhones[key];
     if (ov?.model && PHONES[ov.brand]?.[ov.model]) {
       return { brand: ov.brand, model: ov.model, dims: PHONES[ov.brand][ov.model] };
     }
     return phone;
-  }, [sheetOverrides, phone]);
+  }, [slotPhones, phone]);
 
   const isLandscape = perSheet >= 3;
   const a4now       = getA4(perSheet);
-  const activePhone = getSheetPhone(activeSheet);
+
+  // Reference phone for layout (first slot's phone or default)
+  const refPhone = getSlotPhone(activeSheet, 0) || phone;
   const layout = useMemo(
-    () => activePhone ? computeLayout(activePhone.dims, perSheet, bleed, 8, 5, a4now) : [],
-    [activePhone, perSheet, bleed, isLandscape]
+    () => refPhone ? computeLayout(refPhone.dims, perSheet, bleed, 8, 5, a4now) : [],
+    [refPhone, perSheet, bleed, isLandscape]
   );
   const totalPhones = useMemo(() => BRANDS.reduce((a, b) => a + Object.keys(PHONES[b]).length, 0), []);
 
-  // Resize canvas + redraw whenever orientation or content changes
+  // Resize canvas + redraw whenever anything changes
   useEffect(() => {
     const cv = canvasRef.current;
-    if (!cv || !activePhone || step !== 4) return;
+    if (!cv || !refPhone || step !== 4) return;
     cv.width  = isLandscape ? 1123 : 794;
     cv.height = isLandscape ? 794  : 1123;
     const sp = Array.from({ length: perSheet }, (_, i) => photos[`${activeSheet}-${i}`] || null);
-    renderA4(cv, activePhone, layout, sp, { showBleed, bgColor, a4: a4now });
-  }, [activePhone, layout, photos, activeSheet, showBleed, bgColor, step, perSheet, isLandscape]);
+    const spPhones = Array.from({ length: perSheet }, (_, i) => getSlotPhone(activeSheet, i));
+    renderA4(cv, refPhone, layout, sp, { showBleed, bgColor, a4: a4now, slotPhones: spPhones });
+  }, [refPhone, layout, photos, activeSheet, showBleed, bgColor, step, perSheet, isLandscape, slotPhones]);
 
-  const handleFile = useCallback((file, key) => {
+  // Normalise EXIF orientation on upload to fix upside-down / mirrored photos
+  const handleFile = useCallback(async (file, key) => {
     if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = new Image();
-      img.onload = () => setPhotos(prev => ({
-        ...prev,
-        [key]: { img, dataURL: e.target.result, zoom: 1, rotate: 0, offsetX: 0, offsetY: 0, brightness: 100, contrast: 100, saturation: 100 },
-      }));
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+    const { img, dataURL } = await normaliseImage(file);
+    setPhotos(prev => ({
+      ...prev,
+      [key]: { img, dataURL, zoom: 1, rotate: 0, offsetX: 0, offsetY: 0,
+               brightness: 100, contrast: 100, saturation: 100 },
+    }));
   }, []);
 
   const generatePDF = async () => {
-    if (!phone && Object.keys(sheetOverrides).length === 0) return;
+    if (!phone && Object.keys(slotPhones).length === 0) return;
     setPdfLoading(true);
     try {
       const pxmm = 200 / 25.4;
-      const a4   = getA4(perSheet);
+      const a4 = getA4(perSheet);
       const landscape = perSheet >= 3;
       const jpegPages = [];
+
       for (let s = 0; s < sheetCount; s++) {
-        const sp = getSheetPhone(s);
-        if (!sp) continue;
+        const spPhones = Array.from({ length: perSheet }, (_, i) => getSlotPhone(s, i));
+        const rp = spPhones.find(p => p) || phone;
+        if (!rp) continue;
         const oc = document.createElement("canvas");
         oc.width  = Math.round(a4.w * pxmm);
         oc.height = Math.round(a4.h * pxmm);
-        const sl = computeLayout(sp.dims, perSheet, bleed, 8, 5, a4);
+        const sl = computeLayout(rp.dims, perSheet, bleed, 8, 5, a4);
         const ph = Array.from({ length: perSheet }, (_, i) => photos[`${s}-${i}`] || null);
-        renderA4(oc, sp, sl, ph, { showBleed: false, bgColor, a4 });
-        jpegPages.push({ bytes: canvasToJpegBytes(oc, 0.93), w: oc.width, h: oc.height });
+        renderA4(oc, rp, sl, ph, { showBleed: false, bgColor, a4, slotPhones: spPhones });
+        // Pre-flip vertically so PDF content stream q W 0 0 H 0 0 renders right-side up
+        jpegPages.push({ bytes: flippedJpegBytes(oc, 0.93), w: oc.width, h: oc.height });
       }
+
       const blob = buildPDF(jpegPages, landscape);
-      downloadBlob(blob, `PrintMyCase-${(activePhone?.model || "sheet").replace(/\s+/g, "-")}.pdf`);
+      const firstName = (getSlotPhone(0, 0)?.model || phone?.model || "sheet").replace(/\s+/g, "-");
+      downloadBlob(blob, `PrintMyCase-${firstName}.pdf`);
       setPdfDone(true);
       setTimeout(() => setPdfDone(false), 3000);
     } catch (e) {
@@ -934,20 +976,22 @@ export default function PrintMyCase() {
   };
 
   const handlePrint = () => {
-    if (!phone && Object.keys(sheetOverrides).length === 0) return;
+    if (!phone && Object.keys(slotPhones).length === 0) return;
     const pxmm = 150 / 25.4;
     const a4   = getA4(perSheet);
     const landscape = perSheet >= 3;
     const imgSrcs = [];
+
     for (let s = 0; s < sheetCount; s++) {
-      const sp = getSheetPhone(s);
-      if (!sp) continue;
+      const spPhones = Array.from({ length: perSheet }, (_, i) => getSlotPhone(s, i));
+      const rp = spPhones.find(p => p) || phone;
+      if (!rp) continue;
       const oc = document.createElement("canvas");
       oc.width  = Math.round(a4.w * pxmm);
       oc.height = Math.round(a4.h * pxmm);
-      const sl = computeLayout(sp.dims, perSheet, bleed, 8, 5, a4);
+      const sl = computeLayout(rp.dims, perSheet, bleed, 8, 5, a4);
       const ph = Array.from({ length: perSheet }, (_, i) => photos[`${s}-${i}`] || null);
-      renderA4(oc, sp, sl, ph, { showBleed: true, bgColor, a4 });
+      renderA4(oc, rp, sl, ph, { showBleed: true, bgColor, a4, slotPhones: spPhones });
       imgSrcs.push(oc.toDataURL("image/jpeg", 0.95));
     }
     openPrintWindow(imgSrcs, landscape);
@@ -1282,84 +1326,65 @@ export default function PrintMyCase() {
             )}
 
             <div style={CARD}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
                 <div>
                   <h2 style={{ fontFamily: headingFont, fontWeight: 700, fontSize: 20, margin: "0 0 2px" }}>Upload Photos</h2>
-                  <p style={{ color: C.muted, fontSize: 12, margin: 0 }}>Sheet {activeSheet + 1} of {sheetCount} · {perSheet} slot{perSheet > 1 ? "s" : ""}</p>
+                  <p style={{ color: C.muted, fontSize: 12, margin: 0 }}>Sheet {activeSheet + 1} of {sheetCount} · {perSheet} slot{perSheet > 1 ? "s" : ""} · pick a phone per slot</p>
                 </div>
                 <span style={{ fontSize: 11, padding: "4px 11px", borderRadius: 20, fontWeight: 600, background: photoCount === perSheet ? (dark ? "rgba(34,197,94,0.12)" : "rgba(34,197,94,0.1)") : C.subtle, color: photoCount === perSheet ? "#22c55e" : C.muted }}>
                   {photoCount}/{perSheet} uploaded
                 </span>
               </div>
 
-              {/* Per-sheet phone override ─────────────────────── */}
-              <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 12, background: C.subtle, border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.09em", color: C.muted, marginBottom: 7 }}>
-                  Phone for Sheet {activeSheet + 1}
-                </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <select
-                    value={sheetOverrides[activeSheet]?.brand || brand}
-                    onChange={e => {
-                      const b = e.target.value;
-                      setSheetOverrides(prev => ({ ...prev, [activeSheet]: { brand: b, model: "" } }));
-                    }}
-                    style={{ ...INPUT, flex: "1 1 120px", padding: "7px 10px", fontSize: 12 }}
-                  >
-                    {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                  <select
-                    value={sheetOverrides[activeSheet]?.model || model}
-                    onChange={e => {
-                      const m = e.target.value;
-                      const b = sheetOverrides[activeSheet]?.brand || brand;
-                      setSheetOverrides(prev => ({ ...prev, [activeSheet]: { brand: b, model: m } }));
-                    }}
-                    style={{ ...INPUT, flex: "2 1 160px", padding: "7px 10px", fontSize: 12 }}
-                  >
-                    <option value="">Select model…</option>
-                    {Object.keys(PHONES[sheetOverrides[activeSheet]?.brand || brand] || {}).map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                  {sheetOverrides[activeSheet]?.model && (
-                    <button
-                      onClick={() => setSheetOverrides(prev => { const n = { ...prev }; delete n[activeSheet]; return n; })}
-                      style={{ padding: "7px 12px", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, cursor: "pointer", fontSize: 11, fontFamily, whiteSpace: "nowrap" }}
-                    >
-                      ↺ Use default
-                    </button>
-                  )}
-                </div>
-                {getSheetPhone(activeSheet) && (
-                  <div style={{ marginTop: 6, fontSize: 11, color: C.sub }}>
-                    📱 <b>{getSheetPhone(activeSheet).brand} {getSheetPhone(activeSheet).model}</b>
-                    <span style={{ color: C.muted, marginLeft: 6, fontFamily: "monospace" }}>
-                      {getSheetPhone(activeSheet).dims.w}×{getSheetPhone(activeSheet).dims.h}mm
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Upload slots grid */}
-              <div style={{ display: "grid", gridTemplateColumns: perSheet === 1 ? "1fr" : "1fr 1fr", gap: 12, maxWidth: perSheet === 1 ? 220 : "100%", margin: "0 auto" }}>
+              {/* Per-slot grids */}
+              <div style={{ display: "grid", gridTemplateColumns: perSheet === 1 ? "1fr" : "1fr 1fr", gap: 14, maxWidth: perSheet === 1 ? 260 : "100%", margin: "0 auto" }}>
                 {Array.from({ length: perSheet }, (_, i) => {
-                  const key = `${activeSheet}-${i}`;
-                  const photo = photos[key];
-                  const slot = layout[i];
-                  const ar = slot ? slot.w / slot.h : 0.47;
-                  const isOver = dragOver === key;
+                  const key      = `${activeSheet}-${i}`;
+                  const photo    = photos[key];
+                  const slotKey  = key;
+                  const ov       = slotPhones[slotKey];
+                  const curBrand = ov?.brand || brand;
+                  const sp       = getSlotPhone(activeSheet, i);
+                  const slot     = layout[i];
+                  const ar       = slot ? slot.w / slot.h : 0.47;
+                  const isOver   = dragOver === key;
 
                   return (
-                    <div key={i}>
+                    <div key={i} style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+
+                      {/* ── Phone picker for this slot ─────────── */}
+                      <div style={{ borderRadius: 10, padding: "8px 10px", background: C.subtle, border: `1px solid ${C.border}` }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.muted, marginBottom: 5 }}>
+                          Slot {i + 1} Phone
+                        </div>
+                        <div style={{ display: "flex", gap: 5 }}>
+                          <select value={curBrand || ""} onChange={e =>
+                            setSlotPhones(prev => ({ ...prev, [slotKey]: { brand: e.target.value, model: "" } }))}
+                            style={{ flex: "0 0 90px", padding: "5px 6px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.input, color: C.text, fontSize: 10, fontFamily, outline: "none" }}>
+                            {BRANDS.map(b => <option key={b} value={b}>{b === "Google Pixel" ? "Pixel" : b}</option>)}
+                          </select>
+                          <select value={ov?.model || ""} onChange={e =>
+                            setSlotPhones(prev => ({ ...prev, [slotKey]: { brand: curBrand || brand, model: e.target.value } }))}
+                            style={{ flex: 1, padding: "5px 6px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.input, color: C.text, fontSize: 10, fontFamily, outline: "none" }}>
+                            <option value="">{model ? `Default: ${model}` : "Pick model…"}</option>
+                            {Object.keys(PHONES[curBrand || brand] || {}).map(m => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ marginTop: 4, fontSize: 9, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+                          {sp ? <>📱 <b style={{ color: C.sub }}>{sp.brand} {sp.model}</b> · <span style={{ fontFamily: "monospace" }}>{sp.dims.w}×{sp.dims.h}mm</span></> : <span>No phone selected</span>}
+                          {ov?.model && <button onClick={() => setSlotPhones(prev => { const n = { ...prev }; delete n[slotKey]; return n; })}
+                            style={{ marginLeft: "auto", fontSize: 9, color: ACCENT, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily }}>↺ reset</button>}
+                        </div>
+                      </div>
+
+                      {/* ── Upload zone ───────────────────────── */}
                       <div
-                        style={{
-                          position: "relative", borderRadius: 14, overflow: "hidden",
-                          aspectRatio: String(ar), cursor: photo ? "default" : "pointer",
+                        style={{ position: "relative", borderRadius: 12, overflow: "hidden", aspectRatio: String(ar), cursor: photo ? "default" : "pointer",
                           border: `2px dashed ${isOver ? ACCENT : photo ? C.border : (dark ? "#2d2d42" : "#ddd")}`,
                           background: isOver ? (dark ? "rgba(99,102,241,0.09)" : "rgba(99,102,241,0.04)") : C.subtle,
-                          transition: "border-color 0.2s, background 0.2s",
-                        }}
+                          transition: "border-color 0.2s, background 0.2s" }}
                         onDragOver={e => { e.preventDefault(); setDragOver(key); }}
                         onDragLeave={() => setDragOver(null)}
                         onDrop={e => { e.preventDefault(); setDragOver(null); handleFile(e.dataTransfer.files[0], key); }}
@@ -1367,43 +1392,31 @@ export default function PrintMyCase() {
                       >
                         {photo ? (
                           <>
-                            <img src={photo.dataURL} alt="" style={{
-                              width: "100%", height: "100%", objectFit: "cover", display: "block",
-                              filter: `brightness(${photo.brightness}%) contrast(${photo.contrast}%) saturate(${photo.saturation}%)`,
-                            }} />
-                            {/* Hover overlay */}
-                            <div className="photo-overlay" style={{
-                              position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              gap: 8, opacity: 0, transition: "opacity 0.2s",
-                            }}
+                            <img src={photo.dataURL} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block",
+                              filter: `brightness(${photo.brightness}%) contrast(${photo.contrast}%) saturate(${photo.saturation}%)` }} />
+                            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: 0, transition: "opacity 0.2s" }}
                               onMouseEnter={e => e.currentTarget.style.opacity = 1}
-                              onMouseLeave={e => e.currentTarget.style.opacity = 0}
-                            >
+                              onMouseLeave={e => e.currentTarget.style.opacity = 0}>
                               <button onClick={e => { e.stopPropagation(); setEditing({ key, ...photo }); }}
-                                style={{ padding: "7px 13px", borderRadius: 8, border: "none", background: "#fff", color: "#111", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily }}>
-                                ✏️ Edit
-                              </button>
+                                style={{ padding: "7px 13px", borderRadius: 8, border: "none", background: "#fff", color: "#111", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily }}>✏️ Edit</button>
                               <button onClick={e => { e.stopPropagation(); setPhotos(p => { const n = { ...p }; delete n[key]; return n; }); }}
-                                style={{ padding: "7px 13px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily }}>
-                                🗑️
-                              </button>
+                                style={{ padding: "7px 13px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily }}>🗑️</button>
                             </div>
                           </>
                         ) : (
                           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 }}>
-                            <div style={{ width: 38, height: 38, borderRadius: "50%", border: `2px dashed ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: C.muted, marginBottom: 4 }}>+</div>
-                            <div style={{ fontWeight: 600, fontSize: 12, color: C.sub }}>Photo {i + 1}</div>
-                            <div style={{ fontSize: 10, color: C.muted }}>Click or drag & drop</div>
-                            {slot && <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>{slot.w.toFixed(1)}×{slot.h.toFixed(1)} mm slot</div>}
+                            <div style={{ width: 36, height: 36, borderRadius: "50%", border: `2px dashed ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: C.muted }}>+</div>
+                            <div style={{ fontWeight: 600, fontSize: 11, color: C.sub }}>Photo {i + 1}</div>
+                            <div style={{ fontSize: 9, color: C.muted }}>Click or drag & drop</div>
+                            {slot && <div style={{ fontSize: 8, color: C.muted, marginTop: 1 }}>{slot.w.toFixed(1)}×{slot.h.toFixed(1)} mm</div>}
                           </div>
                         )}
                       </div>
 
                       {photo && (
-                        <div style={{ display: "flex", gap: 6, marginTop: 7 }}>
-                          <button onClick={() => setEditing({ key, ...photo })} style={{ flex: 1, padding: "7px 0", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.sub, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily }}>✏️ Edit</button>
-                          <button onClick={() => { pendingSlot.current = key; fileRef.current?.click(); }} style={{ flex: 1, padding: "7px 0", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.sub, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily }}>↺ Replace</button>
+                        <div style={{ display: "flex", gap: 5 }}>
+                          <button onClick={() => setEditing({ key, ...photo })} style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.sub, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily }}>✏️ Edit</button>
+                          <button onClick={() => { pendingSlot.current = key; fileRef.current?.click(); }} style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.sub, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily }}>↺ Replace</button>
                         </div>
                       )}
                     </div>
@@ -1412,7 +1425,7 @@ export default function PrintMyCase() {
               </div>
 
               <div style={{ marginTop: 16, padding: "10px 14px", borderRadius: 10, background: C.subtle, fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
-                💡 <b>Tip:</b> Use high-resolution photos (3000px+ recommended) for crisp 300 DPI print quality. Supports JPG, PNG, HEIC, WebP.
+                💡 <b>Tip:</b> Use high-resolution photos (3000px+) for crisp print quality. Each slot can have a different phone model.
               </div>
 
               <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
